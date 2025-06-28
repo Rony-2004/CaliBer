@@ -105,31 +105,59 @@ const JobTrackingPage: React.FC = () => {
               <div className="text-sm text-gray-700 space-y-2">
                 <div className="flex justify-between"><span>Order ID</span><span className="font-mono font-semibold">{mockService.orderId}</span></div>
                 <div className="flex justify-between"><span>Service</span><span className="font-semibold">{mockService.name}</span></div>
-                <div className="flex justify-between"><span>Provider</span><span className="font-semibold">{mockService.provider}</span></div>
                 <div className="flex justify-between"><span>Booking Time</span><span className="font-semibold">{mockService.bookingTime}</span></div>
                 <div className="flex justify-between"><span>Status</span><span className="font-semibold">{mockService.status}</span></div>
               </div>
             </div>
-            {/* Real-Time Tracking Benefits */}
+            {/* Worker Details */}
             <div className="bg-white rounded-xl shadow p-6">
               <h2 className="font-semibold text-lg mb-4 flex items-center gap-2">
-                <span>Real-Time Tracking Benefits</span>
+                <FiUser className="w-5 h-5 text-gray-600" />
+                <span>Worker Details</span>
               </h2>
-              <div className="flex flex-col gap-4 text-sm text-gray-700">
-                <div className="flex items-start gap-3">
-                  <span className="inline-block bg-yellow-100 text-yellow-700 rounded-full p-2"><svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="#fbbf24" strokeWidth="2" /><path d="M12 6v6l4 2" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
-                  <div>
-                    <span className="font-semibold">Stay Informed</span>
-                    <p>Know exactly when your provider will arrive. No more guessing games.</p>
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
+                  <Image 
+                    src={mockWorkers[0].avatar} 
+                    alt={mockWorkers[0].name}
+                    width={64}
+                    height={64}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-gray-800 text-lg">{mockWorkers[0].name}</h3>
+                  <p className="text-gray-600 text-sm">{mockWorkers[0].description}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-yellow-500 text-sm">★★★★☆</span>
+                    <span className="text-gray-500 text-sm">4.0 (120 reviews)</span>
                   </div>
                 </div>
-                <div className="flex items-start gap-3">
-                  <span className="inline-block bg-blue-100 text-blue-700 rounded-full p-2"><svg width="20" height="20" fill="none" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" stroke="#3b82f6" strokeWidth="2"/><path d="M8 12h8M8 16h5" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round"/></svg></span>
-                  <div>
-                    <span className="font-semibold">Plan Your Day</span>
-                    <p>Accurate ETAs allow you to manage your time effectively.</p>
-                  </div>
-                </div>
+              </div>
+              <div className="flex gap-2 mt-4">
+                <button 
+                  className="flex-1 flex items-center justify-center gap-1.5 bg-yellow-500 border border-black text-white py-1 px-2.5 rounded-md font-medium transition-colors duration-200 hover:bg-yellow-600 text-xs"
+                  onClick={() => {
+                    // Navigate to chat page
+                    router.push(`/chat?workerId=${mockWorkers[0].id}&workerName=${encodeURIComponent(mockWorkers[0].name)}`);
+                  }}
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  Message
+                </button>
+                <button 
+                  className="flex-1 flex items-center justify-center gap-1.5 bg-yellow-500 border border-black text-white py-1 px-2.5 rounded-md font-medium transition-colors duration-200 hover:bg-yellow-600 text-xs"
+                  onClick={() => {
+                    // Initiate phone call
+                    const phoneNumber = mockWorkers[0].phone || '+1234567890';
+                    window.open(`tel:${phoneNumber}`, '_self');
+                  }}
+                >
+                  <FiPhone className="w-3 h-3" />
+                  Call
+                </button>
               </div>
             </div>
             {/* Payment Details */}
@@ -182,31 +210,59 @@ const JobTrackingPage: React.FC = () => {
           <div className="text-sm text-gray-700 space-y-2">
             <div className="flex justify-between"><span>Order ID</span><span className="font-mono font-semibold">{mockService.orderId}</span></div>
             <div className="flex justify-between"><span>Service</span><span className="font-semibold">{mockService.name}</span></div>
-            <div className="flex justify-between"><span>Provider</span><span className="font-semibold">{mockService.provider}</span></div>
             <div className="flex justify-between"><span>Booking Time</span><span className="font-semibold">{mockService.bookingTime}</span></div>
             <div className="flex justify-between"><span>Status</span><span className="font-semibold">{mockService.status}</span></div>
           </div>
         </div>
-        {/* Real-Time Tracking Benefits */}
+        {/* Worker Details */}
         <div className="bg-white rounded-xl shadow p-6">
           <h2 className="font-semibold text-lg mb-4 flex items-center gap-2">
-            <span>Real-Time Tracking Benefits</span>
+            <FiUser className="w-5 h-5 text-gray-600" />
+            <span>Worker Details</span>
           </h2>
-          <div className="flex flex-col gap-4 text-sm text-gray-700">
-            <div className="flex items-start gap-3">
-              <span className="inline-block bg-yellow-100 text-yellow-700 rounded-full p-2"><svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="#fbbf24" strokeWidth="2" /><path d="M12 6v6l4 2" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
-              <div>
-                <span className="font-semibold">Stay Informed</span>
-                <p>Know exactly when your provider will arrive. No more guessing games.</p>
+          <div className="flex items-center gap-4 mb-4">
+            <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
+              <Image 
+                src={mockWorkers[0].avatar} 
+                alt={mockWorkers[0].name}
+                width={64}
+                height={64}
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-gray-800 text-lg">{mockWorkers[0].name}</h3>
+              <p className="text-gray-600 text-sm">{mockWorkers[0].description}</p>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-yellow-500 text-sm">★★★★☆</span>
+                <span className="text-gray-500 text-sm">4.0 (120 reviews)</span>
               </div>
             </div>
-            <div className="flex items-start gap-3">
-              <span className="inline-block bg-blue-100 text-blue-700 rounded-full p-2"><svg width="20" height="20" fill="none" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" stroke="#3b82f6" strokeWidth="2"/><path d="M8 12h8M8 16h5" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round"/></svg></span>
-              <div>
-                <span className="font-semibold">Plan Your Day</span>
-                <p>Accurate ETAs allow you to manage your time effectively.</p>
-              </div>
-            </div>
+          </div>
+          <div className="flex gap-2 mt-4">
+            <button 
+              className="flex-1 flex items-center justify-center gap-1.5 bg-yellow-500 border border-black text-white py-1 px-2.5 rounded-md font-medium transition-colors duration-200 hover:bg-yellow-600 text-xs"
+              onClick={() => {
+                // Navigate to chat page
+                router.push(`/chat?workerId=${mockWorkers[0].id}&workerName=${encodeURIComponent(mockWorkers[0].name)}`);
+              }}
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              Message
+            </button>
+            <button 
+              className="flex-1 flex items-center justify-center gap-1.5 bg-yellow-500 border border-black text-white py-1 px-2.5 rounded-md font-medium transition-colors duration-200 hover:bg-yellow-600 text-xs"
+              onClick={() => {
+                // Initiate phone call
+                const phoneNumber = mockWorkers[0].phone || '+1234567890';
+                window.open(`tel:${phoneNumber}`, '_self');
+              }}
+            >
+              <FiPhone className="w-3 h-3" />
+              Call
+            </button>
           </div>
         </div>
         {/* Payment Details */}
