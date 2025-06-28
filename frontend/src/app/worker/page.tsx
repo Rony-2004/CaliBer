@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useUser } from '@civic/auth/react';
+import { useUser } from '@clerk/nextjs';
 
 import styles from './worker.module.css';
 
@@ -90,7 +90,7 @@ const ThemedLoadingAnimation = ({ loadingText, onAnimationComplete }: ThemedLoad
 
 export default function WorkerGatewayPage() {
     const router = useRouter();
-    const { user, isLoading } = useUser();
+    const { user, isLoaded } = useUser();
 
     const [hasIntroPlayed, setHasIntroPlayed] = useState(
         () => typeof window !== 'undefined' && sessionStorage.getItem('introPlayed') === 'true'
@@ -121,7 +121,7 @@ export default function WorkerGatewayPage() {
         if (workerProfile) {
             router.push('/worker/dashboard');
         } else {
-            router.push(`/worker/onboarding?email=${encodeURIComponent(user.email || '')}`);
+            router.push(`/worker/onboarding?email=${encodeURIComponent(user.primaryEmailAddress?.emailAddress || '')}`);
         }
     }, [user, router]);
 
@@ -130,7 +130,7 @@ export default function WorkerGatewayPage() {
         return <WorkerIntroAnimation />;
     }
 
-    if (isLoading || user) {
+    if (!isLoaded || user) {
         const text = user ? "Launching " : "";
         // Using the new ThemedLoadingAnimation component
         return <ThemedLoadingAnimation loadingText={text} onAnimationComplete={handleRedirect} />;
