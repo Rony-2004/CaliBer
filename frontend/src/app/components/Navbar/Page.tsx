@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
+import { useUser } from '@clerk/nextjs';
 import { useCart } from '../../booking/cart/cartContext';
 
 // --- SVG Icon Components (Replaces @tabler/icons-react) ---
