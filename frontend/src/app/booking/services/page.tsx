@@ -249,7 +249,7 @@ const ServiceBookingPage: React.FC = () => {
             setBookingStage("idle");
             setAddress("");
             showToast('Booking confirmed! Redirecting to worker assignment...', 'success');
-            router.push(`/booking/worker-assigned?id=${randomWorker.id}`);
+            router.push(`/booking/worker-assigned?id=${randomWorker.id}&paymentMethod=cash`);
           }, 1500);
         }
       } catch (error) {

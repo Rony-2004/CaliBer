@@ -7,6 +7,7 @@ export default function WorkerAssignedPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const workerId = searchParams.get("id");
+  const paymentMethod = searchParams.get("paymentMethod") || "online";
   const [progress, setProgress] = useState(0);
   const worker = mockWorkers.find(w => String(w.id) === String(workerId));
 
@@ -19,9 +20,9 @@ export default function WorkerAssignedPage() {
 
   useEffect(() => {
     if (workerId) {
-      router.replace(`/job-tracking?workerId=${workerId}`);
+      router.replace(`/job-tracking?workerId=${workerId}&paymentMethod=${paymentMethod}`);
     }
-  }, [workerId, router]);
+  }, [workerId, paymentMethod, router]);
 
   if (!worker) {
     return <div className="min-h-screen flex items-center justify-center text-2xl text-red-500">Worker not found.</div>;

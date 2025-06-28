@@ -48,7 +48,7 @@ export default function PaymentSuccessPage() {
         
         // Redirect to tracking page after a short delay
         setTimeout(() => {
-          router.push(`/job-tracking?workerId=${mockWorkerId}&payment=completed&sessionId=${sessionId}`);
+          router.push(`/job-tracking?workerId=${mockWorkerId}&paymentMethod=online&sessionId=${sessionId}`);
         }, 1500);
         
       } catch (error) {

@@ -38,6 +38,26 @@ const JobTrackingPage: React.FC = () => {
 
   const jobId = searchParams.get("jobId");
   const workerId = searchParams.get("workerId");
+  const paymentMethod = searchParams.get("paymentMethod") || "online"; // Default to online if not specified
+
+  // Determine payment details based on payment method
+  const getPaymentDetails = () => {
+    if (paymentMethod === "cash") {
+      return {
+        method: "Cash on Delivery",
+        status: "Pending",
+        statusColor: "text-orange-600"
+      };
+    } else {
+      return {
+        method: "Online (UPI)",
+        status: "Paid",
+        statusColor: "text-green-600"
+      };
+    }
+  };
+
+  const paymentDetails = getPaymentDetails();
 
   useEffect(() => {
     // Connect to socket for real-time updates
@@ -167,8 +187,8 @@ const JobTrackingPage: React.FC = () => {
               </h2>
               <div className="text-sm text-gray-700 space-y-2">
                 <div className="flex justify-between"><span>Amount</span><span className="font-semibold">₹499</span></div>
-                <div className="flex justify-between"><span>Payment Method</span><span className="font-semibold">Online (UPI)</span></div>
-                <div className="flex justify-between"><span>Status</span><span className="font-semibold text-green-600">Paid</span></div>
+                <div className="flex justify-between"><span>Payment Method</span><span className="font-semibold">{paymentDetails.method}</span></div>
+                <div className="flex justify-between"><span>Status</span><span className="font-semibold {paymentDetails.statusColor}">{paymentDetails.status}</span></div>
               </div>
             </div>
           </div>
@@ -272,8 +292,8 @@ const JobTrackingPage: React.FC = () => {
           </h2>
           <div className="text-sm text-gray-700 space-y-2">
             <div className="flex justify-between"><span>Amount</span><span className="font-semibold">₹499</span></div>
-            <div className="flex justify-between"><span>Payment Method</span><span className="font-semibold">Online (UPI)</span></div>
-            <div className="flex justify-between"><span>Status</span><span className="font-semibold text-green-600">Paid</span></div>
+            <div className="flex justify-between"><span>Payment Method</span><span className="font-semibold">{paymentDetails.method}</span></div>
+            <div className="flex justify-between"><span>Status</span><span className="font-semibold {paymentDetails.statusColor}">{paymentDetails.status}</span></div>
           </div>
         </div>
       </div>

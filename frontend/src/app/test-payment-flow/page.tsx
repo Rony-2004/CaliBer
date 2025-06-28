@@ -27,7 +27,7 @@ export default function TestPaymentFlowPage() {
         showToast('Testing cash on delivery...', 'info');
         setTimeout(() => {
           showToast('Cash booking successful! Redirecting to worker assignment...', 'success');
-          router.push('/booking/worker-assigned?id=test_worker_123');
+          router.push('/booking/worker-assigned?id=test_worker_123&paymentMethod=cash');
         }, 2000);
       } else {
         // Test online payment flow
