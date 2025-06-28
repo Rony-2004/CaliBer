@@ -1,9 +1,8 @@
 import os
-import google.generativeai as genai
-from typing import Optional, Dict, List
 import requests
+from typing import Optional, Dict, List
 
-# Define the categories and subcategories EXACTLY as in frontend
+# Define the categories and subcategories
 CATEGORIES = [
     { "id": "plumber", "name": "Plumber", "icon": "💧" },
     { "id": "electrician", "name": "Electrician", "icon": "⚡" },
@@ -13,16 +12,17 @@ CATEGORIES = [
     { "id": "women_grooming", "name": "Women's Grooming", "icon": "💅" },
 ]
 
+# Subcategory mapping
 SUBCATEGORY_MAP = {
-    "plumber": ["Tape Repair", "Leak Fixing", "Pipe Installation", "Drain Cleaning", "Toilet Repair", "Water Heater Repair"],
-    "electrician": ["Electrical Repair", "Wiring Installation", "Switch & Socket Repair", "Fan Installation", "Light Installation", "MCB or Fuse Repair"],
-    "carpenter": ["Wood Work", "Furniture Assembly", "Door/Window Repair", "Cabinet Installation", "Custom Shelves"],
-    "mechanic": ["Car Service", "Bike Service", "Emergency Service", "Tire Change"],
-    "mens_grooming": ["Haircut", "Shaving", "Facial", "Hair Color", "Massage"],
-    "women_grooming": ["Facial", "Hair Color", "Body Massage"],
+    "plumber": ["Tap Repair", "Pipe Repair", "Toilet Repair", "Drain Cleaning", "Water Heater"],
+    "electrician": ["Wiring", "Switch Repair", "Fan Installation", "Light Installation", "MCB Repair"],
+    "carpenter": ["Furniture Repair", "Door Repair", "Window Repair", "Cabinet Installation", "Shelf Installation"],
+    "mechanic": ["Car Service", "Bike Service", "AC Service", "Oil Change", "Tire Service"],
+    "mens_grooming": ["Haircut", "Shave", "Facial", "Hair Color", "Head Massage"],
+    "women_grooming": ["Facial", "Hair Color", "Body Massage", "Manicure", "Pedicure"],
 }
 
-# EXACT keyword mapping based on frontend subcategories
+# Keyword mapping for category detection
 KEYWORD_MAPPING = {
     # Plumber keywords
     "plumber": "plumber",
@@ -128,92 +128,24 @@ KEYWORD_MAPPING = {
     "haircolour": "women_grooming",
 }
 
-# Configure Gemini API
-api_key = os.getenv("GEMINI_API_KEY")
-if not api_key:
-    raise ValueError("GEMINI_API_KEY is not configured. Check your .env file in the 'ai' folder.")
-genai.configure(api_key=api_key)
-
-def get_workers_by_specialization(category: str, subcategory: str = None) -> Dict:
-    """
-    Fetch workers from backend by specialization category and subcategory
-    """
-    try:
-        # Replace with your actual backend URL
-        backend_url = os.getenv("BACKEND_URL", "http://localhost:5000")
-        
-        if subcategory:
-            # Convert display name to enum value for backend
-            subcategory_enum = get_subcategory_enum(subcategory)
-            response = requests.get(f"{backend_url}/api/v1/specializations/workers/{category}/{subcategory_enum}")
-        else:
-            response = requests.get(f"{backend_url}/api/v1/specializations/workers/{category}")
-        
-        if response.status_code == 200:
-            return response.json()
-        else:
-            return {"error": f"Failed to fetch workers: {response.status_code}"}
-    except Exception as e:
-        return {"error": f"Error connecting to backend: {str(e)}"}
-
-def get_subcategory_enum(display_name: str) -> str:
-    """
-    Convert display name to backend enum value
-    """
-    enum_mapping = {
-        # Plumber
-        "Tape Repair": "tape_repair",
-        "Leak Fixing": "leak_fixing", 
-        "Pipe Installation": "pipe_installation",
-        "Drain Cleaning": "drain_cleaning",
-        "Toilet Repair": "toilet_repair",
-        "Water Heater Repair": "water_repair",
-        
-        # Electrician
-        "Electrical Repair": "electrical_repair",
-        "Wiring Installation": "wiring_installation",
-        "Switch & Socket Repair": "switch_and_socket_repair",
-        "Fan Installation": "fan_installation",
-        "Light Installation": "light_installation",
-        "MCB or Fuse Repair": "mcb_or_fuse_repair",
-        
-        # Carpenter
-        "Wood Work": "wood_work",
-        "Furniture Assembly": "furniture_assembly",
-        "Door/Window Repair": "window_repair",
-        "Cabinet Installation": "cabinate_installation",
-        "Custom Shelves": "custom_shelves",
-        
-        # Mechanic
-        "Car Service": "car_service",
-        "Bike Service": "bike_service",
-        "Emergency Service": "emergency_service",
-        "Tire Change": "tire_change",
-        
-        # Men's Grooming
-        "Haircut": "haircut",
-        "Shaving": "saving",
-        "Facial": "facial",
-        "Hair Color": "hair_color",
-        "Massage": "full_body_massage",
-        
-        # Women's Grooming
-        "Body Massage": "body_massage",
-    }
+def find_category(user_prompt: str) -> str:
+    """Find the category based on user prompt"""
+    user_prompt_lower = user_prompt.lower()
     
-    return enum_mapping.get(display_name, display_name.lower().replace(" ", "_"))
+    for keyword, category in KEYWORD_MAPPING.items():
+        if keyword in user_prompt_lower:
+            return category
+    
+    return None
 
-def find_best_subcategory_match(category: str, user_prompt: str) -> str:
-    """
-    Find the best matching subcategory for the given category and user prompt
-    """
+def find_subcategory(category: str, user_prompt: str) -> str:
+    """Find the best matching subcategory"""
     if category not in SUBCATEGORY_MAP:
         return None
     
     subcategories = SUBCATEGORY_MAP[category]
     user_prompt_lower = user_prompt.lower()
     
-    # Find the subcategory with the most matching words
     best_match = None
     best_score = 0
     
@@ -237,155 +169,95 @@ def find_best_subcategory_match(category: str, user_prompt: str) -> str:
     
     return best_match if best_score > 0 else None
 
-def analyze_file_content(file_path: str, user_prompt: str) -> str:
-    """
-    Analyze uploaded file (image/video) to enhance the user prompt
-    """
+def get_workers_by_specialization(category: str, subcategory: str = None) -> Dict:
+    """Fetch workers from backend by specialization"""
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        backend_url = os.getenv("BACKEND_URL", "http://localhost:5000")
         
-        # Determine file type
-        file_extension = file_path.lower().split('.')[-1]
-        is_image = file_extension in ['jpg', 'jpeg', 'png', 'gif', 'webp']
-        is_video = file_extension in ['mp4', 'avi', 'mov', 'wmv', 'flv']
-        
-        if is_image:
-            prompt = f"""
-            Analyze this image and describe what service might be needed.
-            User's description: "{user_prompt}"
-            
-            Look for:
-            - Plumbing issues (leaks, broken pipes, clogged drains, etc.)
-            - Electrical problems (broken switches, wiring issues, etc.)
-            - Carpentry needs (broken furniture, door/window issues, etc.)
-            - Mechanical problems (car/bike issues, etc.)
-            - Grooming needs (hair, beauty services, etc.)
-            
-            Provide a brief description of what you see that relates to service needs.
-            """
-        elif is_video:
-            prompt = f"""
-            Analyze this video and describe what service might be needed.
-            User's description: "{user_prompt}"
-            
-            Look for:
-            - Plumbing issues (leaks, broken pipes, clogged drains, etc.)
-            - Electrical problems (broken switches, wiring issues, etc.)
-            - Carpentry needs (broken furniture, door/window issues, etc.)
-            - Mechanical problems (car/bike issues, etc.)
-            - Grooming needs (hair, beauty services, etc.)
-            
-            Provide a brief description of what you see that relates to service needs.
-            """
+        if subcategory:
+            # Convert display name to enum value
+            subcategory_enum = get_subcategory_enum(subcategory)
+            response = requests.get(f"{backend_url}/api/v1/specializations/workers/{category}/{subcategory_enum}")
         else:
-            return user_prompt
+            response = requests.get(f"{backend_url}/api/v1/specializations/workers/{category}")
         
-        # Upload and analyze the file
-        uploaded_file = genai.upload_file(path=file_path)
-        response = model.generate_content([prompt, uploaded_file])
-        
-        # Combine user prompt with file analysis
-        file_analysis = response.text.strip()
-        enhanced_prompt = f"{user_prompt}. File analysis: {file_analysis}"
-        
-        return enhanced_prompt
-        
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return {"error": f"Failed to fetch workers: {response.status_code}", "data": []}
     except Exception as e:
-        print(f"File analysis failed: {e}")
-        return user_prompt
+        return {"error": f"Error connecting to backend: {str(e)}", "data": []}
 
-def get_service_keyword_from_gemini(user_prompt: str, file_path: Optional[str] = None) -> Dict[str, any]:
-    """
-    Detect the language of the prompt, translate it if needed, and extract the most relevant service keyword.
-    Returns category, subcategory, and workers data with redirect URL.
+def get_subcategory_enum(display_name: str) -> str:
+    """Convert display name to backend enum value"""
+    enum_mapping = {
+        # Plumber
+        "Tap Repair": "tape_repair",
+        "Pipe Repair": "pipe_installation",
+        "Toilet Repair": "toilet_repair",
+        "Drain Cleaning": "drain_cleaning",
+        "Water Heater": "water_repair",
+        
+        # Electrician
+        "Wiring": "wiring_installation",
+        "Switch Repair": "switch_and_socket_repair",
+        "Fan Installation": "fan_installation",
+        "Light Installation": "light_installation",
+        "MCB Repair": "mcb_or_fuse_repair",
+        
+        # Carpenter
+        "Furniture Repair": "wood_work",
+        "Door Repair": "window_repair",
+        "Window Repair": "window_repair",
+        "Cabinet Installation": "cabinate_installation",
+        "Shelf Installation": "custom_shelves",
+        
+        # Mechanic
+        "Car Service": "car_service",
+        "Bike Service": "bike_service",
+        "AC Service": "emergency_service",
+        "Oil Change": "emergency_service",
+        "Tire Service": "tire_change",
+        
+        # Men's Grooming
+        "Haircut": "haircut",
+        "Shave": "saving",
+        "Facial": "facial",
+        "Hair Color": "hair_color",
+        "Head Massage": "full_body_massage",
+        
+        # Women's Grooming
+        "Body Massage": "body_massage",
+    }
+    
+    return enum_mapping.get(display_name, display_name.lower().replace(" ", "_"))
 
-    Args:
-        user_prompt (str): The user's input.
-        file_path (Optional[str]): Optional path to a file that should be included in the prompt.
-
-    Returns:
-        dict: A dictionary with the detected category, subcategory, workers data, and redirect URL.
-    """
+def get_service_keyword_fallback(user_prompt: str, file_path: Optional[str] = None) -> Dict[str, any]:
+    """Main function to analyze user prompt and return results"""
     try:
-        # Enhance prompt with file analysis if file is provided
-        enhanced_prompt = user_prompt
-        if file_path:
-            enhanced_prompt = analyze_file_content(file_path, user_prompt)
+        # Find category
+        detected_category = find_category(user_prompt)
         
-        model = genai.GenerativeModel('gemini-1.5-flash')
-
-        # Create a comprehensive prompt for the AI
-        categories_text = "\n".join([f"- {cat['name']} ({cat['id']})" for cat in CATEGORIES])
-        
-        prompt = [
-            (
-                "You are a multilingual service-request interpreter.\n"
-                "Step 1: Detect the language of the user's message. If it's not in English, translate it.\n"
-                "Step 2: Based on the English request, choose the most relevant category from the list below.\n"
-                "Step 3: Output only the category ID in lowercase. No extra text or explanation.\n\n"
-                f"Available Categories:\n{categories_text}\n\n"
-                f"User Request: \"{enhanced_prompt}\""
-            )
-        ]
-
-        response = model.generate_content(prompt)
-        raw_output = response.text.strip().lower().replace('.', '').replace('\n', '')
-
-        # Validate or approximate match the output
-        detected_category = None
-        
-        # First check if it's a direct match
-        if raw_output in [cat['id'] for cat in CATEGORIES]:
-            detected_category = raw_output
-        else:
-            # Try to find a match in the keyword mapping
-            for keyword, category in KEYWORD_MAPPING.items():
-                if keyword in raw_output:
-                    detected_category = category
-                    break
-
         if not detected_category:
-            # Fallback: try to find the best match based on keyword similarity
-            for keyword, category in KEYWORD_MAPPING.items():
-                if any(word in enhanced_prompt.lower() for word in keyword.split()):
-                    detected_category = category
-                    break
+            raise ValueError(f"Could not determine service category for: '{user_prompt}'")
 
-        if not detected_category:
-            raise ValueError(f"Could not determine service category for: '{enhanced_prompt}'")
-
-        # Find the best matching subcategory
-        detected_subcategory = find_best_subcategory_match(detected_category, enhanced_prompt)
+        # Find subcategory
+        detected_subcategory = find_subcategory(detected_category, user_prompt)
         
-        # Get category name for display
+        # Get category name
         category_name = next((cat['name'] for cat in CATEGORIES if cat['id'] == detected_category), detected_category)
         
         # Fetch workers from backend
         workers_data = get_workers_by_specialization(detected_category, detected_subcategory)
         
-        # Create redirect URL to exact booking page
-        redirect_url = f"/booking/services?service={encodeURIComponent(category_name)}"
-        if detected_subcategory:
-            redirect_url += f"&subcategory={encodeURIComponent(detected_subcategory)}"
-        
         return {
             "category": detected_category,
             "categoryName": category_name,
             "subcategory": detected_subcategory,
-            "keyword": detected_category,  # Keep for backward compatibility
             "workers": workers_data,
-            "redirectUrl": redirect_url,
-            "userPrompt": user_prompt,
-            "enhancedPrompt": enhanced_prompt if enhanced_prompt != user_prompt else None
+            "userPrompt": user_prompt
         }
 
     except Exception as e:
-        print(f"[ERROR] Gemini processing failed: {e}")
+        print(f"[ERROR] Processing failed: {e}")
         raise e
-
-def encodeURIComponent(text: str) -> str:
-    """
-    Simple URL encoding function
-    """
-    import urllib.parse
-    return urllib.parse.quote(text)

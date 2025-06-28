@@ -1,5 +1,6 @@
 import os
 import uuid
+import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -7,54 +8,81 @@ from dotenv import load_dotenv
 # Load environment variables from .env file in the current folder
 load_dotenv()
 
-# Import the Gemini logic function
-from problem_identifier import get_service_keyword_from_gemini
+from problem_identifier import get_service_keyword_fallback
 
-# Initialize the Flask app
 app = Flask(__name__)
-# Enable CORS to allow requests from your frontend
 CORS(app)
 
 TEMP_DIR = "temp_uploads"
 os.makedirs(TEMP_DIR, exist_ok=True)
 
+def get_worker_name(worker_id):
+    backend_url = os.getenv("BACKEND_URL", "http://localhost:5000")
+    try:
+        resp = requests.get(f"{backend_url}/api/v1/workers/{worker_id}")
+        if resp.status_code == 200:
+            data = resp.json()
+            return f"{data.get('firstName', '')} {data.get('lastName', '')}".strip()
+        else:
+            print(f"Worker fetch failed for {worker_id}: {resp.status_code}")
+    except Exception as e:
+        print(f"Error fetching worker {worker_id}: {e}")
+    return None
+
 @app.route("/api/analyze", methods=["POST"])
 def analyze():
-    """
-    This function handles requests to the /api/analyze endpoint.
-    """
     file_path = None
     try:
-        # Get the description from the form data
         description = request.form.get('description', '')
 
-        # Check if a file was sent
         if 'file' in request.files:
             file = request.files['file']
             if file.filename != '':
-                # Save the file temporarily
                 unique_filename = f"{uuid.uuid4()}_{file.filename}"
                 file_path = os.path.join(TEMP_DIR, unique_filename)
                 file.save(file_path)
 
-        # Get the analysis from the REAL Gemini API
-        result = get_service_keyword_from_gemini(user_prompt=description, file_path=file_path)
+        result = get_service_keyword_fallback(user_prompt=description, file_path=file_path)
 
-        # Return the result as a JSON response
-        return jsonify(result)
+        # Fetch worker names using workerId
+        worker_names = []
+        missing_worker_ids = []
+        if result.get('workers') and result['workers'].get('data'):
+            for w in result['workers']['data']:
+                worker_id = w.get('workerId')
+                if not worker_id:
+                    missing_worker_ids.append("(no workerId in specialization row)")
+                    continue
+                name = get_worker_name(worker_id)
+                if name:
+                    worker_names.append(name)
+                else:
+                    missing_worker_ids.append(worker_id)
+
+        # Compose a helpful message
+        if not result.get('workers') or not result['workers'].get('data'):
+            message = f"No specializations found for {result.get('categoryName', '')} - {result.get('subcategory', '')}."
+        elif not worker_names:
+            message = f"No workers found for {result.get('categoryName', '')} - {result.get('subcategory', '')}."
+            if missing_worker_ids:
+                message += f" (Missing or invalid worker IDs: {', '.join(missing_worker_ids)})"
+        else:
+            message = f"Found {len(worker_names)} workers for {result.get('categoryName', '')} - {result.get('subcategory', '')}"
+
+        response = {
+            'category': result.get('categoryName', ''),
+            'subcategory': result.get('subcategory', ''),
+            'worker_names': worker_names,
+            'message': message
+        }
+        return jsonify(response)
 
     except Exception as e:
         print(f"An error occurred: {e}")
-        # Return a JSON error response with a 500 status code
         return jsonify({"error": str(e)}), 500
-
     finally:
-        # Clean up by deleting the temporary file if it exists
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
 
-# This block allows you to run the server by typing "python main.py"
 if __name__ == "__main__":
-    # Running in debug mode gives you helpful error messages
-    # and automatically reloads the server when you make changes.
     app.run(port=8000, debug=True)
