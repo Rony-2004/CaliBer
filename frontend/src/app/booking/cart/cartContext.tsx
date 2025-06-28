@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
+import { useToast } from '@/components/Toast';
 
 export interface CartService {
   name: string;
@@ -21,6 +22,7 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [cart, setCart] = useState<CartService[]>([]);
+  const { showToast } = useToast();
 
   // Load cart from localStorage on mount
   useEffect(() => {
@@ -57,15 +59,24 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   // Optimize cart operations with useCallback
   const addToCart = useCallback((service: CartService) => {
     setCart((prev) => [...prev, service]);
-  }, []);
+    showToast(`${service.name} added to cart!`, 'success');
+  }, [showToast]);
 
   const removeFromCart = useCallback((index: number) => {
-    setCart((prev) => prev.filter((_, i) => i !== index));
-  }, []);
+    setCart((prev) => {
+      const removedItem = prev[index];
+      const newCart = prev.filter((_, i) => i !== index);
+      if (removedItem) {
+        showToast(`${removedItem.name} removed from cart`, 'info');
+      }
+      return newCart;
+    });
+  }, [showToast]);
 
   const clearCart = useCallback(() => {
     setCart([]);
-  }, []);
+    showToast('Cart cleared successfully', 'success');
+  }, [showToast]);
 
   // Memoize context value to prevent unnecessary re-renders
   const contextValue = useMemo(() => ({

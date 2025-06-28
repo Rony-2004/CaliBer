@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import styles from "./dashboard.module.css";
 import { useJobTracking } from "@/lib/jobTracking";
+import { useToast } from '@/components/Toast';
 import { PageLoadAnimation, PulsingDots } from "@/components/LoadingAnimations";
 import "leaflet/dist/leaflet.css";
 import {
@@ -134,6 +135,7 @@ type HistoryJob = JobRequest & { status: "completed" | "declined" };
 
 export default function WorkerDashboardPage() {
   const router = useRouter();
+  const { showToast } = useToast();
   const {
     currentJob,
     assignedWorker,
@@ -198,11 +200,11 @@ export default function WorkerDashboardPage() {
         userId: currentJob.userId,
         durationMinutes: currentJob.durationMinutes,
       };
-
       setJobRequest(newJobRequest);
       setJobStatus("incoming");
+      showToast('New job request received!', 'info');
     }
-  }, [currentJob, isJobAccepted]);
+  }, [currentJob, isJobAccepted, showToast]);
 
   // Handle job acceptance
   useEffect(() => {
@@ -216,6 +218,23 @@ export default function WorkerDashboardPage() {
       }
     }
   }, [isJobAccepted, currentJob, isLive, location]);
+
+  // Handle socket connection status
+  useEffect(() => {
+    if (isSocketConnected) {
+      showToast('Connected to job network', 'success');
+    } else {
+      showToast('Disconnected from job network', 'warning');
+    }
+  }, [isSocketConnected, showToast]);
+
+  // Handle errors
+  useEffect(() => {
+    if (error) {
+      showToast(error, 'error');
+      clearError();
+    }
+  }, [error, clearError, showToast]);
 
   useEffect(() => {
     const savedProfile = localStorage.getItem("userProfile");
@@ -327,58 +346,68 @@ export default function WorkerDashboardPage() {
   };
 
   const handleAcceptJob = () => {
-    setJobStatus("accepted");
-    if (location && jobRequest) {
-      fetchRoute(location, jobRequest.clientLocation);
+    if (jobRequest) {
+      acceptJob(jobRequest.id);
+      setJobStatus("accepted");
+      setJobHistory(prev => [...prev, { ...jobRequest, status: "completed" }]);
+      setJobsCompleted(prev => prev + 1);
+      setEarnings(prev => prev + jobRequest.fare);
+      showToast('Job accepted successfully!', 'success');
     }
   };
 
   const resetJobState = () => {
-    setJobStatus("idle");
     setJobRequest(null);
+    setJobStatus("idle");
     setRoute(null);
+    showToast('Job state reset', 'info');
   };
 
   const handleDeclineJob = () => {
     if (jobRequest) {
-      setJobHistory((prev) => [{ ...jobRequest, status: "declined" }, ...prev]);
+      setJobHistory(prev => [...prev, { ...jobRequest, status: "declined" }]);
+      resetJobState();
+      showToast('Job declined', 'warning');
     }
-    resetJobState();
   };
 
   const handleCompleteJob = () => {
     if (jobRequest) {
-      setEarnings((prevEarnings) => prevEarnings + jobRequest.fare);
-      setJobsCompleted((prevCount) => prevCount + 1);
-      setJobHistory((prev) => [
-        { ...jobRequest, status: "completed" },
-        ...prev,
-      ]);
+      completeJob(jobRequest.id);
+      setJobStatus("completed");
+      setJobHistory(prev => [...prev, { ...jobRequest, status: "completed" }]);
+      setJobsCompleted(prev => prev + 1);
+      setEarnings(prev => prev + jobRequest.fare);
+      showToast('Job completed successfully!', 'success');
+      setTimeout(() => {
+        resetJobState();
+      }, 2000);
     }
-    resetJobState();
   };
 
   const handleSetGoal = () => {
-    const newTarget = parseInt(goalInput, 10);
-    if (!isNaN(newTarget) && newTarget > 0) {
-      setWeeklyGoal({ target: newTarget });
+    const newGoal = parseInt(goalInput);
+    if (newGoal > 0) {
+      setWeeklyGoal({ target: newGoal });
       setIsEditingGoal(false);
+      showToast('Weekly goal updated successfully!', 'success');
     } else {
-      alert("Please enter a valid positive number for your goal.");
+      showToast('Please enter a valid goal amount', 'error');
     }
   };
 
   const toggleTheme = () => {
     const newTheme = theme === "light" ? "dark" : "light";
     setTheme(newTheme);
-    localStorage.setItem("worker-theme", newTheme);
-    document.documentElement.className =
-      newTheme === "dark" ? styles.darkTheme : "";
+    showToast(`${newTheme.charAt(0).toUpperCase() + newTheme.slice(1)} theme activated`, 'info');
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("userProfile");
-    router.push("/");
+    showToast('Logging out...', 'info');
+    // Add your logout logic here
+    setTimeout(() => {
+      router.push("/worker");
+    }, 1000);
   };
 
   const formatTime = (totalSeconds: number) => {
@@ -395,15 +424,47 @@ export default function WorkerDashboardPage() {
 
   // Start location tracking for accepted job
   const startLocationTracking = () => {
-    if (!currentJob || !isLive) return;
+    if (!("geolocation" in navigator)) {
+      showToast('Geolocation is not supported by your browser', 'error');
+      return;
+    }
 
-    const locationInterval = setInterval(() => {
-      if (location && isTrackingActive) {
-        updateLocation(currentJob.id, "", location.lat, location.lng);
-      }
-    }, 5000); // Update every 5 seconds
+    setIsLive(true);
+    showToast('Location tracking started. You are now live!', 'success');
 
-    return () => clearInterval(locationInterval);
+    const successCallback = (position: GeolocationPosition) => {
+      const { latitude, longitude } = position.coords;
+      setLocation({ lat: latitude, lng: longitude });
+      setLocationError(null);
+      updateLocation(latitude, longitude);
+    };
+
+    const errorCallback = (error: GeolocationPositionError) => {
+      setLocationError(`Location error: ${error.message}`);
+      showToast('Location tracking failed. Please check your permissions.', 'error');
+      setIsLive(false);
+    };
+
+    const options = {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 0,
+    };
+
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      successCallback,
+      errorCallback,
+      options
+    );
+  };
+
+  const stopLocationTracking = () => {
+    if (watchIdRef.current) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    setIsLive(false);
+    showToast('Location tracking stopped', 'info');
   };
 
   return (

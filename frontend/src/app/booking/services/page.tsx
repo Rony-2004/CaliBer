@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCart } from "../cart/cartContext";
 import { getOrCreateUserByEmail } from "@/lib/userService";
 import { useUser, useSignIn } from '@clerk/nextjs';
+import { useToast } from '@/components/Toast';
 import {
   BookingProgress,
   ButtonLoader,
@@ -44,6 +45,7 @@ const ServiceBookingPage: React.FC = () => {
   const { addToCart, cart } = useCart();
   const { user, isSignedIn, isLoaded } = useUser();
   const { signIn } = useSignIn();
+  const { showToast } = useToast();
 
   // State management
   const [selectedPaymentMethod, setSelectedPaymentMethod] =
@@ -178,11 +180,12 @@ const ServiceBookingPage: React.FC = () => {
     // Check if user is signed in
     if (!isSignedIn || !user) {
       console.log("❌ [BOOKING] User not signed in, redirecting to sign in...");
+      showToast('Please sign in to continue with booking', 'warning');
       try {
         await signIn();
       } catch (err) {
         console.error("❌ [BOOKING] Sign-in failed:", err);
-        alert("Please sign in to continue with booking.");
+        showToast('Sign-in failed. Please try again.', 'error');
       }
       return;
     }
@@ -191,18 +194,19 @@ const ServiceBookingPage: React.FC = () => {
     const userEmail = user.primaryEmailAddress?.emailAddress || user.emailAddresses?.[0]?.emailAddress;
     if (!userEmail) {
       console.error("❌ [BOOKING] No user email found");
-      alert("Email address not found. Please update your profile or sign in again.");
+      showToast('Email address not found. Please update your profile or sign in again.', 'error');
       return;
     }
 
     if (!("geolocation" in navigator)) {
       console.error("❌ [BOOKING] Geolocation not supported");
-      alert("Geolocation is not supported by your browser.");
+      showToast('Geolocation is not supported by your browser.', 'error');
       return;
     }
 
     if (selectedPaymentMethod) {
       console.log("✅ [BOOKING] All checks passed, starting booking...");
+      showToast('Starting your booking process...', 'info');
       setIsBookingConfirmed(true);
       setBookingStage("initiating");
 
@@ -213,12 +217,16 @@ const ServiceBookingPage: React.FC = () => {
           setIsBookingConfirmed(false);
           setBookingStage("idle");
           setAddress("");
+          showToast('Booking confirmed! Redirecting to worker assignment...', 'success');
           router.push(`/booking/worker-assigned?id=${randomWorker.id}`);
         }, 1500);
       } catch (error) {
         setIsBookingConfirmed(false);
         setBookingStage("idle");
+        showToast('Booking failed. Please try again.', 'error');
       }
+    } else {
+      showToast('Please select a payment method', 'warning');
     }
   }, [
     user,
@@ -232,11 +240,17 @@ const ServiceBookingPage: React.FC = () => {
     discount,
     couponApplied,
     coupon,
+    showToast,
   ]);
 
   // Handler for when workers are found
   const handleWorkerFound = (count: number) => {
     setNearbyWorkerCount(count);
+    if (count > 0) {
+      showToast(`${count} worker${count > 1 ? 's' : ''} found nearby!`, 'success');
+    } else {
+      showToast('No workers available in your area at the moment.', 'warning');
+    }
   };
 
   // Optimized coupon handler with useCallback
@@ -244,12 +258,13 @@ const ServiceBookingPage: React.FC = () => {
     if (coupon.trim().toUpperCase() === "USER25") {
       setDiscount(Math.round(currentService.price * 0.25));
       setCouponApplied(true);
+      showToast('Coupon applied successfully! 25% discount added.', 'success');
     } else {
       setDiscount(0);
       setCouponApplied(false);
-      alert("Invalid coupon code");
+      showToast('Invalid coupon code. Please try again.', 'error');
     }
-  }, [coupon, currentService.price]);
+  }, [coupon, currentService.price, showToast]);
 
   // Optimized cart handler with useCallback
   const handleAddToCart = useCallback(() => {
@@ -259,8 +274,11 @@ const ServiceBookingPage: React.FC = () => {
         price: currentService.price,
         category: currentService.category,
       });
+      // Note: The toast is already handled in the cart context
+    } else {
+      showToast('Service is already in your cart!', 'info');
     }
-  }, [isInCart, addToCart, currentService]);
+  }, [isInCart, addToCart, currentService, showToast]);
 
   // Show page loading animation
   if (isPageLoading) {

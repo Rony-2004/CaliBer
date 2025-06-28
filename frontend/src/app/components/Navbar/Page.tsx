@@ -4,7 +4,8 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { useCart } from '../../booking/cart/cartContext';
-import { useUser, SignInButton, SignOutButton } from '@clerk/nextjs';
+import { useUser, SignInButton, SignOutButton, useClerk } from '@clerk/nextjs';
+import { useToast } from '@/components/Toast';
 
 // --- SVG Icon Components (Replaces @tabler/icons-react) ---
 const IconMapPin = ({ size = 24, className = "" }) => (
@@ -118,6 +119,8 @@ const IconX = ({ size = 24, className = "" }) => (
 // Main Navbar Component
 export default function App() {
   const pathname = usePathname();
+  const { showToast } = useToast();
+  const { signOut } = useClerk();
 
   // Hide navbar on /worker route and all worker sub-routes (onboarding, dashboard, etc.)
   if (pathname === "/worker" || pathname.startsWith("/worker/")) {
@@ -142,6 +145,10 @@ export default function App() {
     { name: "About Us", link: "/about" },
     { name: "Worker", link: "/worker" },
   ];
+
+  const router = useRouter();
+  const { cart } = useCart();
+  const { isSignedIn, user, isLoaded } = useUser();
 
   // --- EVENT HANDLERS & EFFECTS ---
   useEffect(() => {
@@ -186,9 +193,37 @@ export default function App() {
     }
   }, []);
 
-  const router = useRouter();
-  const { cart } = useCart();
-  const { isSignedIn, user, isLoaded } = useUser();
+  // Show welcome toast when user signs in
+  useEffect(() => {
+    if (isSignedIn && user) {
+      showToast(`Welcome back, ${user.firstName || user.username || 'User'}!`, 'success');
+    }
+  }, [isSignedIn, user, showToast]);
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      showToast('You have been signed out successfully', 'info');
+      setIsProfileMenuOpen(false);
+    } catch (error) {
+      showToast('Error signing out. Please try again.', 'error');
+    }
+  };
+
+  const handleProfileClick = () => {
+    showToast('Navigating to your profile...', 'info');
+    setIsProfileMenuOpen(false);
+    router.push("/profile");
+  };
+
+  const handleCartClick = () => {
+    if (cart.length > 0) {
+      showToast(`You have ${cart.length} item${cart.length > 1 ? 's' : ''} in your cart`, 'info');
+    } else {
+      showToast('Your cart is empty', 'warning');
+    }
+    router.push("/booking/cart");
+  };
 
   return (
     <nav className="fixed top-0 left-0 w-full z-50 bg-white font-sans border-b border-gray-200">
@@ -291,7 +326,7 @@ export default function App() {
             <div className="relative">
               <button
                 className="p-2 rounded-full hover:bg-transparent transition-colors"
-                onClick={() => router.push("/booking/cart")}
+                onClick={handleCartClick}
                 aria-label="Shopping Cart"
               >
                 <IconShoppingCart size={24} className="text-gray-700" />
@@ -314,7 +349,7 @@ export default function App() {
                 <div className="absolute right-0 mt-3 min-w-[12rem] bg-white rounded-md shadow-xl border border-gray-200 z-50 py-2 px-3 ring-1 ring-black ring-opacity-5 transition-all duration-150">
                   <div className="px-4 py-2">
                     {user ? (
-                      <p className="text-sm text-gray-700">Hello, {user.name || 'User'}!</p>
+                      <p className="text-sm text-gray-700">Hello, {user.firstName || user.username || 'User'}!</p>
                     ) : (
                       <p className="text-sm text-gray-700">Welcome, Guest!</p>
                     )}
@@ -324,16 +359,16 @@ export default function App() {
                     <>
                       <button
                         className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                        onClick={() => {
-                          setIsProfileMenuOpen(false);
-                          router.push("/profile");
-                        }}
+                        onClick={handleProfileClick}
                       >
                         Profile
                       </button>
-                      <div className="block w-full text-left px-4 py-2 mt-1">
-                        <SignOutButton />
-                      </div>
+                      <button
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        onClick={handleSignOut}
+                      >
+                        Sign Out
+                      </button>
                       <div className="border-t border-gray-100"></div>
                     </>
                   ) : (

@@ -5,6 +5,7 @@ import Navbar from "@/app/components/Navbar/Page";
 import FooterSecond from "@/app/components/Footer/Page";
 import { CartProvider } from "./booking/cart/cartContext";
 import { JobTrackingProvider } from "@/lib/jobTracking";
+import { ToastProvider } from "@/components/Toast";
 import 'leaflet/dist/leaflet.css';
 import { ClerkProvider } from '@clerk/nextjs';
 
@@ -36,13 +37,15 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased flex flex-col min-h-screen`}
       >
         <JobTrackingProvider>
-          <CartProvider>
-            <ClerkProvider publishableKey={clerkPubKey}>
-              <Navbar />
-              <main className="flex-1">{children}</main>
-              <FooterSecond />
-            </ClerkProvider>
-          </CartProvider>
+          <ClerkProvider publishableKey={clerkPubKey}>
+            <ToastProvider>
+              <CartProvider>
+                <Navbar />
+                <main className="flex-1">{children}</main>
+                <FooterSecond />
+              </CartProvider>
+            </ToastProvider>
+          </ClerkProvider>
         </JobTrackingProvider>
       </body>
     </html>
