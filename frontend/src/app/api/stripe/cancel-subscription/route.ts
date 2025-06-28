@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
-import Stripe from 'stripe';
+import { NextRequest, NextResponse } from "next/server";
+import Stripe from "stripe";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-12-18.acacia',
+  apiVersion: "2025-05-28.basil",
 });
 
 export async function POST(request: NextRequest) {
@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
 
     if (!subscriptionId) {
       return NextResponse.json(
-        { error: 'Missing subscriptionId' },
+        { error: "Missing subscriptionId" },
         { status: 400 }
       );
     }
@@ -27,10 +27,10 @@ export async function POST(request: NextRequest) {
       cancel_at_period_end: subscription.cancel_at_period_end,
     });
   } catch (error) {
-    console.error('Error canceling subscription:', error);
+    console.error("Error canceling subscription:", error);
     return NextResponse.json(
-      { error: 'Failed to cancel subscription' },
+      { error: "Failed to cancel subscription" },
       { status: 500 }
     );
   }
-} 
+}

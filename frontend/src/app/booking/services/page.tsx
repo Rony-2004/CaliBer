@@ -4,8 +4,8 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCart } from "../cart/cartContext";
 import { getOrCreateUserByEmail } from "@/lib/userService";
-import { useUser, useSignIn } from '@clerk/nextjs';
-import { useToast } from '@/components/Toast';
+import { useUser, useSignIn } from "@clerk/nextjs";
+import { useToast } from "@/components/Toast";
 import {
   BookingProgress,
   ButtonLoader,
@@ -17,10 +17,17 @@ import {
   formatAddress,
 } from "@/lib/addressService";
 import { ModernInput, ModernButton } from "@/components/ModernUI";
-import mockWorkers from './mockWorkers';
+import mockWorkers from "./mockWorkers";
 import { ALL_SERVICES, type ServiceDetails } from "@/lib/services";
-import { loadStripe } from '@stripe/stripe-js';
-import { createCustomerPayment } from '@/lib/stripe';
+import { loadStripe } from "@stripe/stripe-js";
+import { createCustomerPayment } from "@/lib/stripe";
+import {
+  createJob,
+  mapServiceCategoryToSpecialization,
+  createJobDescription,
+  validateAndFormatCoordinates,
+  type JobData,
+} from "@/lib/jobService";
 
 // Use the shared service details instead of duplicating
 const SERVICE_DETAILS: Record<string, ServiceDetails> = ALL_SERVICES;
@@ -155,58 +162,173 @@ const ServiceBookingPage: React.FC = () => {
     // Check if user is signed in
     if (!isSignedIn || !user) {
       console.log("❌ [BOOKING] User not signed in, redirecting to sign in...");
-      showToast('Please sign in to continue with booking', 'warning');
+      showToast("Please sign in to continue with booking", "warning");
       try {
         await signIn();
       } catch (err) {
         console.error("❌ [BOOKING] Sign-in failed:", err);
-        showToast('Sign-in failed. Please try again.', 'error');
+        showToast("Sign-in failed. Please try again.", "error");
       }
       return;
     }
 
     // Check if user has email (with better error handling)
-    const userEmail = user.primaryEmailAddress?.emailAddress || user.emailAddresses?.[0]?.emailAddress;
+    const userEmail =
+      user.primaryEmailAddress?.emailAddress ||
+      user.emailAddresses?.[0]?.emailAddress;
     if (!userEmail) {
       console.error("❌ [BOOKING] No user email found");
-      showToast('Email address not found. Please update your profile or sign in again.', 'error');
+      showToast(
+        "Email address not found. Please update your profile or sign in again.",
+        "error"
+      );
       return;
     }
 
     if (!("geolocation" in navigator)) {
       console.error("❌ [BOOKING] Geolocation not supported");
-      showToast('Geolocation is not supported by your browser.', 'error');
+      showToast("Geolocation is not supported by your browser.", "error");
       return;
     }
 
     if (selectedPaymentMethod) {
       console.log("✅ [BOOKING] All checks passed, starting booking...");
-      showToast('Starting your booking process...', 'info');
+      showToast("Starting your booking process...", "info");
       setIsBookingConfirmed(true);
       setBookingStage("initiating");
 
       try {
+        // Get user data from backend (ensure user exists)
+        setBookingStage("creating-user");
+        console.log("👤 [BOOKING] Ensuring user exists in backend...");
+        const userData = await getOrCreateUserByEmail(userEmail, {
+          firstName: user.firstName,
+          lastName: user.lastName,
+          phoneNumber: user.phoneNumbers?.[0]?.phoneNumber,
+        });
+        console.log("✅ [BOOKING] User data retrieved:", userData.id);
+
+        // Get current location
+        setBookingStage("getting-location");
+        console.log("📍 [BOOKING] Getting current location...");
+
+        let locationData;
+        try {
+          locationData = await getCurrentLocationWithAddress();
+          console.log("✅ [BOOKING] Location data:", locationData);
+        } catch (locationError) {
+          console.warn(
+            "⚠️ [BOOKING] Location service failed, using fallback coordinates:",
+            locationError
+          );
+          // Fallback to default coordinates (Kolkata, India)
+          locationData = {
+            formattedAddress: address || "Kolkata, West Bengal, India",
+            coordinates: {
+              lat: 22.5726,
+              lng: 88.3639,
+            },
+          };
+        }
+
+        // Validate coordinates
+        if (!locationData.coordinates.lat || !locationData.coordinates.lng) {
+          console.error("❌ [BOOKING] Invalid coordinates received");
+          showToast("Unable to get your location. Please try again.", "error");
+          setIsBookingConfirmed(false);
+          setBookingStage("idle");
+          return;
+        }
+
+        // Validate and format coordinates
+        let validatedCoords;
+        try {
+          validatedCoords = validateAndFormatCoordinates(
+            locationData.coordinates.lat, 
+            locationData.coordinates.lng
+          );
+          console.log("✅ [BOOKING] Coordinates validated:", validatedCoords);
+        } catch (coordError) {
+          console.error("❌ [BOOKING] Coordinate validation failed:", coordError);
+          showToast("Invalid location data. Please try again.", "error");
+          setIsBookingConfirmed(false);
+          setBookingStage("idle");
+          return;
+        }
+
+        // Create job data
+        const jobData: JobData = {
+          userId: userData.id,
+          specializations: mapServiceCategoryToSpecialization(
+            currentService.category
+          ),
+          description: createJobDescription(
+            currentService.name,
+            currentService.description
+          ),
+          location: address || locationData.formattedAddress,
+          lat: validatedCoords.lat,
+          lng: validatedCoords.lng,
+          status: "pending",
+          bookedFor: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // Book for tomorrow
+          durationMinutes: parseDurationToMinutes(currentService.duration),
+        };
+
+        console.log("📝 [BOOKING] Job data prepared:", jobData);
+
         if (selectedPaymentMethod === "online") {
-          // Handle online payment - redirect to Stripe
+          // Handle online payment - create job first, then redirect to Stripe
           console.log("💳 [BOOKING] Processing online payment...");
-          console.log("🔑 [BOOKING] Stripe key configured:", !!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
-          showToast('Redirecting to secure payment...', 'info');
-          
+          console.log(
+            "🔑 [BOOKING] Stripe key configured:",
+            !!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+          );
+          showToast(
+            "Creating job and redirecting to secure payment...",
+            "info"
+          );
+
           // Test mode: bypass Stripe only if key is missing
           const isTestMode = !process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
-          
+
           if (isTestMode) {
-            console.log('Test mode: Stripe key not configured, simulating payment');
-            showToast('Test mode: Payment would be processed', 'success');
+            console.log(
+              "Test mode: Stripe key not configured, creating job and simulating payment"
+            );
+
+            // Create job in backend
+            setBookingStage("creating-job");
+            const createdJob = await createJob(jobData);
+            console.log(
+              "✅ [BOOKING] Job created in test mode:",
+              createdJob.id
+            );
+
+            showToast(
+              "Test mode: Job created and payment would be processed",
+              "success"
+            );
             setTimeout(() => {
               setIsBookingConfirmed(false);
               setBookingStage("idle");
-              router.push(`/booking/payment-success?session_id=test_session_${Date.now()}`);
+              router.push(
+                `/booking/payment-success?session_id=test_session_${Date.now()}&jobId=${
+                  createdJob.id
+                }`
+              );
             }, 1500);
             return;
           }
-          
-          console.log('🔗 [BOOKING] Creating Stripe payment session...');
+
+          // Create job in backend first
+          setBookingStage("creating-job");
+          const createdJob = await createJob(jobData);
+          console.log(
+            "✅ [BOOKING] Job created for online payment:",
+            createdJob.id
+          );
+
+          console.log("🔗 [BOOKING] Creating Stripe payment session...");
           try {
             const { sessionId } = await createCustomerPayment(
               finalPrice,
@@ -214,52 +336,72 @@ const ServiceBookingPage: React.FC = () => {
               userEmail,
               user.id
             );
-            
-            console.log('✅ [BOOKING] Payment session created:', sessionId);
-            
+
+            console.log("✅ [BOOKING] Payment session created:", sessionId);
+
             // Redirect to Stripe Checkout
             const stripe = await stripePromise;
             if (stripe) {
-              console.log('🔄 [BOOKING] Redirecting to Stripe checkout...');
+              console.log("🔄 [BOOKING] Redirecting to Stripe checkout...");
               const { error } = await stripe.redirectToCheckout({ sessionId });
               if (error) {
-                console.error('❌ [BOOKING] Stripe redirect error:', error);
-                showToast('Payment failed. Please try again.', 'error');
+                console.error("❌ [BOOKING] Stripe redirect error:", error);
+                showToast("Payment failed. Please try again.", "error");
                 setIsBookingConfirmed(false);
                 setBookingStage("idle");
               }
             } else {
-              throw new Error('Stripe failed to load');
+              throw new Error("Stripe failed to load");
             }
           } catch (paymentError) {
-            console.error('❌ [BOOKING] Payment creation failed:', paymentError);
-            showToast('Payment service unavailable. Please try cash on delivery.', 'error');
+            console.error(
+              "❌ [BOOKING] Payment creation failed:",
+              paymentError
+            );
+            showToast(
+              "Payment service unavailable. Please try cash on delivery.",
+              "error"
+            );
             setIsBookingConfirmed(false);
             setBookingStage("idle");
           }
         } else {
-          // Handle cash on delivery - direct to worker assignment
+          // Handle cash on delivery - create job and assign worker
           console.log("💵 [BOOKING] Processing cash on delivery...");
-          showToast('Processing cash on delivery booking...', 'info');
-          
-          // Simulate booking and assign a random worker
-          const randomWorker = mockWorkers[Math.floor(Math.random() * mockWorkers.length)];
+          showToast(
+            "Creating job and processing cash on delivery booking...",
+            "info"
+          );
+
+          // Create job in backend
+          setBookingStage("creating-job");
+          const createdJob = await createJob(jobData);
+          console.log("✅ [BOOKING] Job created for COD:", createdJob.id);
+
+          // Simulate worker assignment
+          const randomWorker =
+            mockWorkers[Math.floor(Math.random() * mockWorkers.length)];
           setTimeout(() => {
             setIsBookingConfirmed(false);
             setBookingStage("idle");
             setAddress("");
-            showToast('Booking confirmed! Redirecting to worker assignment...', 'success');
-            router.push(`/booking/worker-assigned?id=${randomWorker.id}&paymentMethod=cash`);
+            showToast(
+              "Job created and booking confirmed! Redirecting to worker assignment...",
+              "success"
+            );
+            router.push(
+              `/booking/worker-assigned?id=${randomWorker.id}&paymentMethod=cash&jobId=${createdJob.id}`
+            );
           }, 1500);
         }
       } catch (error) {
         console.error("❌ [BOOKING] Booking failed:", error);
         setIsBookingConfirmed(false);
         setBookingStage("idle");
-        showToast('Booking failed. Please try again.', 'error');
+        showToast("Booking failed. Please try again.", "error");
       }
     } else {
-      showToast('Please select a payment method', 'warning');
+      showToast("Please select a payment method", "warning");
     }
   }, [
     user,
@@ -281,9 +423,12 @@ const ServiceBookingPage: React.FC = () => {
   const handleWorkerFound = (count: number) => {
     setNearbyWorkerCount(count);
     if (count > 0) {
-      showToast(`${count} worker${count > 1 ? 's' : ''} found nearby!`, 'success');
+      showToast(
+        `${count} worker${count > 1 ? "s" : ""} found nearby!`,
+        "success"
+      );
     } else {
-      showToast('No workers available in your area at the moment.', 'warning');
+      showToast("No workers available in your area at the moment.", "warning");
     }
   };
 
@@ -292,11 +437,11 @@ const ServiceBookingPage: React.FC = () => {
     if (coupon.trim().toUpperCase() === "USER25") {
       setDiscount(Math.round(currentService.price * 0.25));
       setCouponApplied(true);
-      showToast('Coupon applied successfully! 25% discount added.', 'success');
+      showToast("Coupon applied successfully! 25% discount added.", "success");
     } else {
       setDiscount(0);
       setCouponApplied(false);
-      showToast('Invalid coupon code. Please try again.', 'error');
+      showToast("Invalid coupon code. Please try again.", "error");
     }
   }, [coupon, currentService.price, showToast]);
 
@@ -310,7 +455,7 @@ const ServiceBookingPage: React.FC = () => {
       });
       // Note: The toast is already handled in the cart context
     } else {
-      showToast('Service is already in your cart!', 'info');
+      showToast("Service is already in your cart!", "info");
     }
   }, [isInCart, addToCart, currentService, showToast]);
 
@@ -329,12 +474,26 @@ const ServiceBookingPage: React.FC = () => {
       <div className="min-h-screen bg-white mt-28 flex items-center justify-center">
         <div className="max-w-md mx-auto text-center p-8">
           <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            <svg
+              className="w-8 h-8 text-yellow-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+              />
             </svg>
           </div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Sign In Required</h2>
-          <p className="text-gray-600 mb-6">Please sign in to book this service.</p>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">
+            Sign In Required
+          </h2>
+          <p className="text-gray-600 mb-6">
+            Please sign in to book this service.
+          </p>
           <button
             onClick={() => signIn()}
             className="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors duration-200"
@@ -363,7 +522,9 @@ const ServiceBookingPage: React.FC = () => {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center space-x-4 sm:space-x-6">
               <div className="w-12 h-12 sm:w-16 sm:h-16 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <span className="text-2xl sm:text-3xl">{currentService.icon}</span>
+                <span className="text-2xl sm:text-3xl">
+                  {currentService.icon}
+                </span>
               </div>
               <div className="min-w-0 flex-1">
                 <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-800 passion-one-black leading-tight">
@@ -405,13 +566,17 @@ const ServiceBookingPage: React.FC = () => {
               </h2>
               <div className="space-y-4 sm:space-y-6">
                 <div className="flex justify-between items-center py-3 border-b border-gray-100">
-                  <span className="text-gray-600 font-medium text-sm sm:text-base">Duration:</span>
+                  <span className="text-gray-600 font-medium text-sm sm:text-base">
+                    Duration:
+                  </span>
                   <span className="font-semibold text-gray-800 text-sm sm:text-base">
                     {currentService.duration}
                   </span>
                 </div>
                 <div className="flex justify-between items-center py-3 border-b border-gray-100">
-                  <span className="text-gray-600 font-medium text-sm sm:text-base">Price:</span>
+                  <span className="text-gray-600 font-medium text-sm sm:text-base">
+                    Price:
+                  </span>
                   <span className="font-bold text-2xl sm:text-3xl text-yellow-600">
                     ₹{currentService.price}
                   </span>
@@ -452,24 +617,38 @@ const ServiceBookingPage: React.FC = () => {
               <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 passion-one-black text-gray-800">
                 Booking Summary
               </h2>
-              
+
               {/* User Info */}
               <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-green-50 border border-green-200 rounded-lg">
                 <div className="flex items-center gap-3">
                   <div className="w-6 h-6 sm:w-8 sm:h-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
-                    <svg className="w-3 h-3 sm:w-4 sm:h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    <svg
+                      className="w-3 h-3 sm:w-4 sm:h-4 text-green-600"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                      />
                     </svg>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-xs sm:text-sm font-medium text-green-800">Signed in as</div>
+                    <div className="text-xs sm:text-sm font-medium text-green-800">
+                      Signed in as
+                    </div>
                     <div className="text-xs sm:text-sm text-green-700 truncate">
-                      {user?.primaryEmailAddress?.emailAddress || user?.emailAddresses?.[0]?.emailAddress || 'Loading...'}
+                      {user?.primaryEmailAddress?.emailAddress ||
+                        user?.emailAddresses?.[0]?.emailAddress ||
+                        "Loading..."}
                     </div>
                   </div>
                 </div>
               </div>
-              
+
               {/* Address Input */}
               <div className="mb-4 sm:mb-6">
                 <label className="block text-gray-700 font-medium mb-2 text-sm sm:text-base">
@@ -495,7 +674,7 @@ const ServiceBookingPage: React.FC = () => {
                   </div>
                 )}
               </div>
-              
+
               {/* Coupon Input */}
               <div className="mb-4 sm:mb-6">
                 <label className="block text-gray-700 font-medium mb-2 text-sm sm:text-base">
@@ -641,7 +820,9 @@ const ServiceBookingPage: React.FC = () => {
                 loading={isBookingConfirmed}
                 className="w-full py-3 sm:py-4 mt-2"
               >
-                {isBookingConfirmed ? "Looking for worker near you..." : "Book Now"}
+                {isBookingConfirmed
+                  ? "Looking for worker near you..."
+                  : "Book Now"}
               </ModernButton>
             </div>
           </div>

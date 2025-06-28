@@ -8,8 +8,9 @@ export default function WorkerAssignedPage() {
   const router = useRouter();
   const workerId = searchParams.get("id");
   const paymentMethod = searchParams.get("paymentMethod") || "online";
+  const jobId = searchParams.get("jobId");
   const [progress, setProgress] = useState(0);
-  const worker = mockWorkers.find(w => String(w.id) === String(workerId));
+  const worker = mockWorkers.find((w) => String(w.id) === String(workerId));
 
   useEffect(() => {
     if (progress < 100) {
@@ -20,12 +21,19 @@ export default function WorkerAssignedPage() {
 
   useEffect(() => {
     if (workerId) {
-      router.replace(`/job-tracking?workerId=${workerId}&paymentMethod=${paymentMethod}`);
+      const trackingUrl = jobId
+        ? `/job-tracking?workerId=${workerId}&paymentMethod=${paymentMethod}&jobId=${jobId}`
+        : `/job-tracking?workerId=${workerId}&paymentMethod=${paymentMethod}`;
+      router.replace(trackingUrl);
     }
-  }, [workerId, paymentMethod, router]);
+  }, [workerId, paymentMethod, jobId, router]);
 
   if (!worker) {
-    return <div className="min-h-screen flex items-center justify-center text-2xl text-red-500">Worker not found.</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center text-2xl text-red-500">
+        Worker not found.
+      </div>
+    );
   }
 
   const eta = Math.max(1, Math.ceil((100 - progress) / 10));
@@ -35,4 +43,4 @@ export default function WorkerAssignedPage() {
       <span className="text-gray-500 text-lg">Redirecting to tracking...</span>
     </div>
   );
-} 
+}

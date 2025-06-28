@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useJobTracking } from "@/lib/jobTracking";
-import LiveTrackingMap from "../components/LiveTrackingMap";
+import LiveTrackingMap from "../components/ui";
 import EnhancedTrackingDisplay from "../components/EnhancedTrackingDisplay";
 import {
   FiPlay,

@@ -3,9 +3,10 @@ import React, { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { useCart } from '../../booking/cart/cartContext';
-import { useUser, SignInButton, SignOutButton, useClerk } from '@clerk/nextjs';
-import { useToast } from '@/components/Toast';
+import { useCart } from "../../booking/cart/cartContext";
+import { useUser, SignInButton, SignOutButton, useClerk } from "@clerk/nextjs";
+import { useToast } from "@/components/Toast";
+import { useEnsureUser } from "@/lib/useEnsureUser";
 
 // --- SVG Icon Components (Replaces @tabler/icons-react) ---
 const IconMapPin = ({ size = 24, className = "" }) => (
@@ -123,6 +124,9 @@ export default function App() {
   const { signOut } = useClerk();
   const { isSignedIn, user, isLoaded } = useUser();
 
+  // Add user registration hook
+  const { dbUser, isEnsuring, error: userError } = useEnsureUser();
+
   // Hide navbar on /worker route and all worker sub-routes (onboarding, dashboard, etc.)
   if (pathname === "/worker" || pathname.startsWith("/worker/")) {
     return null;
@@ -193,34 +197,54 @@ export default function App() {
     }
   }, []);
 
-  // Show welcome toast when user signs in
+  // Show welcome toast when user signs in and is registered in backend
   useEffect(() => {
-    if (isSignedIn && user) {
-      showToast(`Welcome back, ${user.firstName || user.username || 'User'}!`, 'success');
+    if (isSignedIn && user && dbUser && !isEnsuring) {
+      showToast(
+        `Welcome back, ${
+          user.firstName || user.username || "User"
+        }! You're all set.`,
+        "success"
+      );
     }
-  }, [isSignedIn, user, showToast]);
+  }, [isSignedIn, user, dbUser, isEnsuring, showToast]);
+
+  // Show error toast if user registration fails
+  useEffect(() => {
+    if (userError && isSignedIn) {
+      showToast(
+        "Failed to sync your account. Please try refreshing the page.",
+        "error"
+      );
+    }
+  }, [userError, isSignedIn, showToast]);
 
   const handleSignOut = async () => {
     try {
       await signOut();
-      showToast('You have been signed out successfully', 'info');
+      showToast("You have been signed out successfully", "info");
       setIsProfileMenuOpen(false);
     } catch (error) {
-      showToast('Error signing out. Please try again.', 'error');
+      showToast("Error signing out. Please try again.", "error");
     }
   };
 
   const handleProfileClick = () => {
-    showToast('Navigating to your profile...', 'info');
+    showToast("Navigating to your profile...", "info");
     setIsProfileMenuOpen(false);
     router.push("/profile");
   };
 
   const handleCartClick = () => {
     if (cart.length > 0) {
-      showToast(`You have ${cart.length} item${cart.length > 1 ? 's' : ''} in your cart`, 'info');
+      showToast(
+        `You have ${cart.length} item${
+          cart.length > 1 ? "s" : ""
+        } in your cart`,
+        "info"
+      );
     } else {
-      showToast('Your cart is empty', 'warning');
+      showToast("Your cart is empty", "warning");
     }
     router.push("/booking/cart");
   };
@@ -313,7 +337,7 @@ export default function App() {
                 </div>
               )}
             </div>
-            
+
             {/* Search Bar (Desktop) */}
             <div className="hidden md:flex">
               <div className="flex items-center border rounded-lg px-3 py-2 w-48 lg:w-56">
@@ -325,7 +349,7 @@ export default function App() {
                 />
               </div>
             </div>
-            
+
             {/* Cart Button */}
             <div className="relative">
               <button
@@ -341,7 +365,7 @@ export default function App() {
                 </span>
               )}
             </div>
-            
+
             {/* Profile Menu (Desktop) */}
             <div className="hidden md:block relative" ref={profileMenuRef}>
               <button
@@ -350,12 +374,35 @@ export default function App() {
                 aria-label="User Profile"
               >
                 <IconUser size={20} className="text-gray-700" />
+                {/* Loading indicator for user registration */}
+                {isEnsuring && (
+                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+                )}
               </button>
               {isProfileMenuOpen && (
                 <div className="absolute right-0 mt-3 min-w-[12rem] bg-white rounded-md shadow-xl border border-gray-200 z-50 py-2 px-3 ring-1 ring-black ring-opacity-5 transition-all duration-150">
                   <div className="px-4 py-2">
                     {user ? (
-                      <p className="text-sm text-gray-700">Hello, {user.firstName || user.username || 'User'}!</p>
+                      <div>
+                        <p className="text-sm text-gray-700">
+                          Hello, {user.firstName || user.username || "User"}!
+                        </p>
+                        {isEnsuring && (
+                          <p className="text-xs text-blue-600 mt-1">
+                            Syncing your account...
+                          </p>
+                        )}
+                        {dbUser && !isEnsuring && (
+                          <p className="text-xs text-green-600 mt-1">
+                            ✓ Account synced
+                          </p>
+                        )}
+                        {userError && (
+                          <p className="text-xs text-red-600 mt-1">
+                            ⚠ Sync failed
+                          </p>
+                        )}
+                      </div>
                     ) : (
                       <p className="text-sm text-gray-700">Welcome, Guest!</p>
                     )}
@@ -366,13 +413,15 @@ export default function App() {
                       <button
                         className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                         onClick={handleProfileClick}
+                        disabled={isEnsuring}
                       >
                         Profile
                       </button>
                       <button
-                        className="block w-full text-left px-4 py-2 my-2 font-semibold bg-yellow-500 border border-yellow-500 text-white rounded-lg shadow-sm hover:bg-yellow-600 transition-colors duration-200"
+                        className="block w-full text-left px-4 py-2 my-2 font-semibold bg-yellow-500 border border-yellow-500 text-white rounded-lg shadow-sm hover:bg-yellow-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                         onClick={handleSignOut}
-                        style={{ fontFamily: 'inherit' }}
+                        disabled={isEnsuring}
+                        style={{ fontFamily: "inherit" }}
                       >
                         Sign Out
                       </button>
@@ -383,7 +432,7 @@ export default function App() {
                       <SignInButton>
                         <button
                           className="w-full px-4 py-2 font-semibold bg-yellow-500 border border-yellow-500 text-white rounded-lg shadow-sm hover:bg-yellow-600 transition-colors duration-200"
-                          style={{ fontFamily: 'inherit' }}
+                          style={{ fontFamily: "inherit" }}
                           type="button"
                         >
                           Sign In
@@ -394,7 +443,7 @@ export default function App() {
                 </div>
               )}
             </div>
-            
+
             {/* Mobile Toggle Button */}
             <div className="md:hidden flex items-center">
               <button
@@ -503,12 +552,28 @@ export default function App() {
               {/* Profile/Login Button */}
               {isSignedIn ? (
                 <div className="space-y-2">
+                  {/* User Status Indicator */}
+                  <div className="px-4 py-2 bg-gray-50 rounded-lg">
+                    {isEnsuring && (
+                      <p className="text-xs text-blue-600">
+                        Syncing your account...
+                      </p>
+                    )}
+                    {dbUser && !isEnsuring && (
+                      <p className="text-xs text-green-600">✓ Account synced</p>
+                    )}
+                    {userError && (
+                      <p className="text-xs text-red-600">⚠ Sync failed</p>
+                    )}
+                  </div>
+
                   <button
                     onClick={() => {
                       handleProfileClick();
                       setIsMobileMenuOpen(false);
                     }}
-                    className="w-full text-left px-4 py-3 text-gray-700 hover:bg-yellow-50 hover:text-yellow-600 rounded-lg transition-all duration-200 border border-transparent hover:border-yellow-200"
+                    className="w-full text-left px-4 py-3 text-gray-700 hover:bg-yellow-50 hover:text-yellow-600 rounded-lg transition-all duration-200 border border-transparent hover:border-yellow-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={isEnsuring}
                   >
                     <div className="flex items-center">
                       <IconUser size={20} className="mr-3" />
@@ -520,7 +585,8 @@ export default function App() {
                       handleSignOut();
                       setIsMobileMenuOpen(false);
                     }}
-                    className="w-full px-4 py-3 font-semibold bg-yellow-500 border border-yellow-500 text-white rounded-lg shadow-sm hover:bg-yellow-600 transition-colors duration-200"
+                    className="w-full px-4 py-3 font-semibold bg-yellow-500 border border-yellow-500 text-white rounded-lg shadow-sm hover:bg-yellow-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={isEnsuring}
                   >
                     Sign Out
                   </button>

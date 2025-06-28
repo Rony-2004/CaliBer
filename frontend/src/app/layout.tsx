@@ -6,8 +6,9 @@ import FooterSecond from "@/app/components/Footer/Page";
 import { CartProvider } from "./booking/cart/cartContext";
 import { JobTrackingProvider } from "@/lib/jobTracking";
 import { ToastProvider } from "@/components/Toast";
-import 'leaflet/dist/leaflet.css';
-import { ClerkProvider } from '@clerk/nextjs';
+import { UserEnsurer } from "@/components/UserEnsurer";
+import "leaflet/dist/leaflet.css";
+import { ClerkProvider } from "@clerk/nextjs";
 
 const clerkPubKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
@@ -40,6 +41,7 @@ export default function RootLayout({
           <ClerkProvider publishableKey={clerkPubKey}>
             <ToastProvider>
               <CartProvider>
+                <UserEnsurer />
                 <Navbar />
                 <main className="flex-1">{children}</main>
                 <FooterSecond />
