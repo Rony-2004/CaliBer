@@ -2,7 +2,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { useCart } from '../../booking/cart/cartContext';
+import { useUser, SignInButton, SignOutButton } from '@clerk/nextjs';
+import SearchSuggestions from '../ui/SearchSuggestions';
 
 // --- SVG Icon Components (Replaces @tabler/icons-react) ---
 const IconMapPin = ({ size = 24, className = "" }) => (
@@ -129,6 +132,8 @@ export default function App() {
   const [location, setLocation] = useState("");
   const [autoLocation, setAutoLocation] = useState<string>("");
   const [isLocationPopupOpen, setIsLocationPopupOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // --- REFS for Click Outside Logic ---
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
@@ -187,6 +192,15 @@ export default function App() {
   const router = useRouter();
   const { cart } = useCart();
   const { isSignedIn, user, isLoaded } = useUser();
+
+  const handleSearchClick = () => {
+    setIsSearchOpen(true);
+  };
+
+  const handleSearchClose = () => {
+    setIsSearchOpen(false);
+    setSearchQuery("");
+  };
 
   return (
     <nav className="fixed top-0 left-0 w-full z-50 bg-white font-sans border-b border-gray-200">
@@ -276,16 +290,20 @@ export default function App() {
                 </div>
               )}
             </div>
+            
+            {/* Search Bar (Desktop) */}
             <div className="hidden md:flex">
-              <div className="flex items-center border rounded-lg px-3 py-2 w-56">
+              <div 
+                className="flex items-center border rounded-lg px-3 py-2 w-56 cursor-pointer hover:border-yellow-500 transition-colors"
+                onClick={handleSearchClick}
+              >
                 <IconSearch size={20} className="text-gray-400 mr-2" />
-                <input
-                  type="text"
-                  placeholder="Search for services..."
-                  className="w-full outline-none bg-transparent text-gray-700 text-sm"
-                />
+                <span className="text-gray-500 text-sm">
+                  Search for services...
+                </span>
               </div>
             </div>
+            
             <div className="relative">
               <button
                 className="p-2 rounded-full hover:bg-transparent transition-colors"
@@ -396,16 +414,17 @@ export default function App() {
             </div>
 
             {/* Mobile Search Bar */}
-            <div className="flex items-center rounded-lg px-3 py-2.5 w-full">
+            <div 
+              className="flex items-center rounded-lg px-3 py-2.5 w-full cursor-pointer hover:border-yellow-500 transition-colors"
+              onClick={handleSearchClick}
+            >
               <IconSearch
                 size={20}
                 className="text-gray-400 mr-3 flex-shrink-0"
               />
-              <input
-                type="text"
-                placeholder="Search for services..."
-                className="w-full outline-none bg-transparent text-gray-700 text-sm"
-              />
+              <span className="text-gray-500 text-sm">
+                Search for services...
+              </span>
             </div>
 
             {/* Divider */}
@@ -427,6 +446,14 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Search Suggestions Modal */}
+      <SearchSuggestions
+        isOpen={isSearchOpen}
+        onClose={handleSearchClose}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+      />
     </nav>
   );
 }

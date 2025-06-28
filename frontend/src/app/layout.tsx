@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import NavbarDemo from "@/app/components/Navbar/Page";
+import Navbar from "@/app/components/Navbar/Page";
 import FooterSecond from "@/app/components/Footer/Page";
 import { CartProvider } from "./booking/cart/cartContext";
 import { JobTrackingProvider } from "@/lib/jobTracking";
@@ -38,7 +38,7 @@ export default function RootLayout({
         <JobTrackingProvider>
           <CartProvider>
             <ClerkProvider publishableKey={clerkPubKey}>
-              <NavbarDemo />
+              <Navbar />
               <main className="flex-1">{children}</main>
               <FooterSecond />
             </ClerkProvider>

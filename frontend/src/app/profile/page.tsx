@@ -429,7 +429,10 @@ export default function ProfilePage() {
                 <input
                   type="number"
                   value={profile.zipCode || ''}
-                  onChange={(e) => handleInputChange('zipCode', parseInt(e.target.value) || undefined)}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    handleInputChange('zipCode', value ? parseInt(value) : 0);
+                  }}
                   disabled={!isEditing}
                   className={`w-full px-3 py-2 border rounded-md ${
                     isEditing 

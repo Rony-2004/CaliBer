@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCart } from "../cart/cartContext";
 import { getOrCreateUserByEmail } from "@/lib/userService";
+import { useUser, useSignIn } from '@clerk/nextjs';
 import {
   BookingProgress,
   ButtonLoader,
@@ -16,525 +17,10 @@ import {
 } from "@/lib/addressService";
 import { ModernInput, ModernButton } from "@/components/ModernUI";
 import mockWorkers from './mockWorkers';
+import { ALL_SERVICES, type ServiceDetails } from "@/lib/services";
 
-interface ServiceDetails {
-  name: string;
-  description: string;
-  price: number;
-  duration: string;
-  icon: string;
-  category: string;
-}
-
-// Move service details outside component to prevent recreation on every render
-const SERVICE_DETAILS: Record<string, ServiceDetails> = {
-  // MenSaloon & WomenSaloon
-  Haircut: {
-    name: "Haircut",
-    description: "Professional haircut service",
-    price: 299,
-    duration: "30-45 min",
-    icon: "✂",
-    category: "Hair Services",
-  },
-  "Hair Color": {
-    name: "Hair Color",
-    description: "Professional hair coloring",
-    price: 899,
-    duration: "1-2 hours",
-    icon: "🎨",
-    category: "Hair Services",
-  },
-  "Hair Styling": {
-    name: "Hair Styling",
-    description: "Creative hair styling",
-    price: 499,
-    duration: "45-60 min",
-    icon: "💇‍♂",
-    category: "Hair Services",
-  },
-  "Hair Treatment": {
-    name: "Hair Treatment",
-    description: "Deep conditioning and repair",
-    price: 599,
-    duration: "45-60 min",
-    icon: "💆‍♂",
-    category: "Hair Services",
-  },
-  "Hair Spa": {
-    name: "Hair Spa",
-    description: "Relaxing hair spa",
-    price: 799,
-    duration: "60-90 min",
-    icon: "🧖‍♂",
-    category: "Hair Services",
-  },
-  "Beard Trim": {
-    name: "Beard Trim",
-    description: "Beard trimming and shaping",
-    price: 199,
-    duration: "20-30 min",
-    icon: "🪒",
-    category: "Grooming Services",
-  },
-  Shave: {
-    name: "Shave",
-    description: "Traditional hot towel shave",
-    price: 299,
-    duration: "30-45 min",
-    icon: "🪒",
-    category: "Grooming Services",
-  },
-  "Beard Styling": {
-    name: "Beard Styling",
-    description: "Beard styling and grooming",
-    price: 399,
-    duration: "30-45 min",
-    icon: "🧔",
-    category: "Grooming Services",
-  },
-  Facial: {
-    name: "Facial",
-    description: "Rejuvenating facial treatment",
-    price: 399,
-    duration: "45-60 min",
-    icon: "✨",
-    category: "Grooming Services",
-  },
-  Threading: {
-    name: "Threading",
-    description: "Eyebrow and face threading",
-    price: 99,
-    duration: "15-20 min",
-    icon: "🧵",
-    category: "Grooming Services",
-  },
-  Waxing: {
-    name: "Waxing",
-    description: "Professional waxing",
-    price: 199,
-    duration: "20-30 min",
-    icon: "🪒",
-    category: "Grooming Services",
-  },
-  Manicure: {
-    name: "Manicure",
-    description: "Nail care and polish",
-    price: 299,
-    duration: "30-45 min",
-    icon: "💅",
-    category: "Grooming Services",
-  },
-  Pedicure: {
-    name: "Pedicure",
-    description: "Foot care and polish",
-    price: 399,
-    duration: "45-60 min",
-    icon: "🦶",
-    category: "Grooming Services",
-  },
-  Makeup: {
-    name: "Makeup",
-    description: "Professional makeup",
-    price: 899,
-    duration: "60-90 min",
-    icon: "💄",
-    category: "Beauty Services",
-  },
-  "Hair Extensions": {
-    name: "Hair Extensions",
-    description: "Hair extension service",
-    price: 1499,
-    duration: "2-3 hours",
-    icon: "👩‍🦱",
-    category: "Hair Services",
-  },
-  // Massage
-  "Head Massage": {
-    name: "Head Massage",
-    description: "Relaxing head massage",
-    price: 299,
-    duration: "30-45 min",
-    icon: "💆‍♂",
-    category: "Massage Services",
-  },
-  "Body Massage": {
-    name: "Body Massage",
-    description: "Full body massage",
-    price: 799,
-    duration: "60-90 min",
-    icon: "💆‍♂",
-    category: "Massage Services",
-  },
-  "Foot Massage": {
-    name: "Foot Massage",
-    description: "Therapeutic foot massage",
-    price: 399,
-    duration: "30-45 min",
-    icon: "🦶",
-    category: "Massage Services",
-  },
-  "Thai Massage": {
-    name: "Thai Massage",
-    description: "Traditional Thai massage",
-    price: 999,
-    duration: "90-120 min",
-    icon: "🧘‍♂",
-    category: "Massage Services",
-  },
-  "Deep Tissue": {
-    name: "Deep Tissue",
-    description: "Deep tissue massage",
-    price: 899,
-    duration: "60-90 min",
-    icon: "💪",
-    category: "Massage Services",
-  },
-  Relaxation: {
-    name: "Relaxation",
-    description: "Gentle relaxation massage",
-    price: 599,
-    duration: "45-60 min",
-    icon: "😌",
-    category: "Massage Services",
-  },
-  // Cleaning
-  "Home Cleaning": {
-    name: "Home Cleaning",
-    description: "Complete home cleaning",
-    price: 599,
-    duration: "2-3 hours",
-    icon: "🏠",
-    category: "Cleaning Services",
-  },
-  "Kitchen Cleaning": {
-    name: "Kitchen Cleaning",
-    description: "Kitchen deep cleaning",
-    price: 399,
-    duration: "1-2 hours",
-    icon: "🍳",
-    category: "Cleaning Services",
-  },
-  "Bathroom Cleaning": {
-    name: "Bathroom Cleaning",
-    description: "Bathroom sanitization",
-    price: 299,
-    duration: "45-60 min",
-    icon: "🚿",
-    category: "Cleaning Services",
-  },
-  "Window Cleaning": {
-    name: "Window Cleaning",
-    description: "Window and glass cleaning",
-    price: 199,
-    duration: "30-45 min",
-    icon: "🪟",
-    category: "Cleaning Services",
-  },
-  "Carpet Cleaning": {
-    name: "Carpet Cleaning",
-    description: "Deep carpet cleaning",
-    price: 499,
-    duration: "1-2 hours",
-    icon: "🟫",
-    category: "Cleaning Services",
-  },
-  "Sofa Cleaning": {
-    name: "Sofa Cleaning",
-    description: "Upholstery cleaning",
-    price: 399,
-    duration: "1-2 hours",
-    icon: "🛋️",
-    category: "Cleaning Services",
-  },
-  // Appliance Repair
-  "AC Repair": {
-    name: "AC Repair",
-    description: "Air conditioner repair",
-    price: 599,
-    duration: "1-2 hours",
-    icon: "❄️",
-    category: "Appliance Repair",
-  },
-  "Refrigerator Repair": {
-    name: "Refrigerator Repair",
-    description: "Refrigerator maintenance",
-    price: 499,
-    duration: "1-2 hours",
-    icon: "🧊",
-    category: "Appliance Repair",
-  },
-  "Washing Machine Repair": {
-    name: "Washing Machine Repair",
-    description: "Washing machine service",
-    price: 399,
-    duration: "1-2 hours",
-    icon: "🧺",
-    category: "Appliance Repair",
-  },
-  "Microwave Repair": {
-    name: "Microwave Repair",
-    description: "Microwave oven repair",
-    price: 299,
-    duration: "30-60 min",
-    icon: "📟",
-    category: "Appliance Repair",
-  },
-  "TV Repair": {
-    name: "TV Repair",
-    description: "Television repair service",
-    price: 399,
-    duration: "1-2 hours",
-    icon: "📺",
-    category: "Appliance Repair",
-  },
-  // Plumbing
-  "Pipe Repair": {
-    name: "Pipe Repair",
-    description: "Pipe and fitting repair",
-    price: 399,
-    duration: "1-2 hours",
-    icon: "🔧",
-    category: "Plumbing Services",
-  },
-  "Tap Repair": {
-    name: "Tap Repair",
-    description: "Faucet and tap repair",
-    price: 299,
-    duration: "30-60 min",
-    icon: "🚰",
-    category: "Plumbing Services",
-  },
-  "Toilet Repair": {
-    name: "Toilet Repair",
-    description: "Toilet and commode repair",
-    price: 399,
-    duration: "1-2 hours",
-    icon: "🚽",
-    category: "Plumbing Services",
-  },
-  "Drain Cleaning": {
-    name: "Drain Cleaning",
-    description: "Drain and sewer cleaning",
-    price: 499,
-    duration: "1-2 hours",
-    icon: "🕳️",
-    category: "Plumbing Services",
-  },
-  "Water Heater": {
-    name: "Water Heater",
-    description: "Water heater installation/repair",
-    price: 599,
-    duration: "2-3 hours",
-    icon: "🔥",
-    category: "Plumbing Services",
-  },
-  // Electrical
-  Wiring: {
-    name: "Wiring",
-    description: "Electrical wiring service",
-    price: 499,
-    duration: "2-3 hours",
-    icon: "⚡",
-    category: "Electrical Services",
-  },
-  "Switch Repair": {
-    name: "Switch Repair",
-    description: "Switch and socket repair",
-    price: 199,
-    duration: "30-60 min",
-    icon: "🔌",
-    category: "Electrical Services",
-  },
-  "Fan Installation": {
-    name: "Fan Installation",
-    description: "Ceiling fan installation",
-    price: 299,
-    duration: "1-2 hours",
-    icon: "💨",
-    category: "Electrical Services",
-  },
-  "Light Installation": {
-    name: "Light Installation",
-    description: "Light fixture installation",
-    price: 199,
-    duration: "30-60 min",
-    icon: "💡",
-    category: "Electrical Services",
-  },
-  "MCB Repair": {
-    name: "MCB Repair",
-    description: "Circuit breaker repair",
-    price: 399,
-    duration: "1-2 hours",
-    icon: "🔋",
-    category: "Electrical Services",
-  },
-  // Carpenter
-  "Furniture Repair": {
-    name: "Furniture Repair",
-    description: "Wooden furniture repair",
-    price: 399,
-    duration: "1-2 hours",
-    icon: "🪑",
-    category: "Carpenter Services",
-  },
-  "Door Repair": {
-    name: "Door Repair",
-    description: "Door and lock repair",
-    price: 299,
-    duration: "1-2 hours",
-    icon: "🚪",
-    category: "Carpenter Services",
-  },
-  "Window Repair": {
-    name: "Window Repair",
-    description: "Window frame repair",
-    price: 399,
-    duration: "1-2 hours",
-    icon: "🪟",
-    category: "Carpenter Services",
-  },
-  "Cabinet Installation": {
-    name: "Cabinet Installation",
-    description: "Kitchen cabinet installation",
-    price: 599,
-    duration: "2-3 hours",
-    icon: "🗄️",
-    category: "Carpenter Services",
-  },
-  "Shelf Installation": {
-    name: "Shelf Installation",
-    description: "Wall shelf installation",
-    price: 199,
-    duration: "30-60 min",
-    icon: "📚",
-    category: "Carpenter Services",
-  },
-  // Painting
-  "Interior Painting": {
-    name: "Interior Painting",
-    description: "Interior wall painting",
-    price: 799,
-    duration: "4-6 hours",
-    icon: "🎨",
-    category: "Painting Services",
-  },
-  "Exterior Painting": {
-    name: "Exterior Painting",
-    description: "Exterior wall painting",
-    price: 999,
-    duration: "6-8 hours",
-    icon: "🏠",
-    category: "Painting Services",
-  },
-  "Door Painting": {
-    name: "Door Painting",
-    description: "Door and gate painting",
-    price: 299,
-    duration: "1-2 hours",
-    icon: "🚪",
-    category: "Painting Services",
-  },
-  "Furniture Painting": {
-    name: "Furniture Painting",
-    description: "Furniture refinishing",
-    price: 499,
-    duration: "2-3 hours",
-    icon: "🪑",
-    category: "Painting Services",
-  },
-  "Wall Texture": {
-    name: "Wall Texture",
-    description: "Wall texture application",
-    price: 699,
-    duration: "3-4 hours",
-    icon: "🧱",
-    category: "Painting Services",
-  },
-  // Pest Control
-  "General Pest Control": {
-    name: "General Pest Control",
-    description: "General pest control service",
-    price: 599,
-    duration: "2-3 hours",
-    icon: "🕷️",
-    category: "Pest Control",
-  },
-  "Cockroach Control": {
-    name: "Cockroach Control",
-    description: "Cockroach elimination",
-    price: 399,
-    duration: "1-2 hours",
-    icon: "🪳",
-    category: "Pest Control",
-  },
-  "Termite Control": {
-    name: "Termite Control",
-    description: "Termite treatment",
-    price: 799,
-    duration: "3-4 hours",
-    icon: "🐜",
-    category: "Pest Control",
-  },
-  "Rodent Control": {
-    name: "Rodent Control",
-    description: "Rat and mouse control",
-    price: 499,
-    duration: "2-3 hours",
-    icon: "🐀",
-    category: "Pest Control",
-  },
-  "Bed Bug Control": {
-    name: "Bed Bug Control",
-    description: "Bed bug treatment",
-    price: 699,
-    duration: "2-3 hours",
-    icon: "🛏️",
-    category: "Pest Control",
-  },
-  // Mechanic
-  "Car Service": {
-    name: "Car Service",
-    description: "Car maintenance service",
-    price: 999,
-    duration: "2-3 hours",
-    icon: "🚗",
-    category: "Mechanic Services",
-  },
-  "Bike Service": {
-    name: "Bike Service",
-    description: "Bike maintenance service",
-    price: 499,
-    duration: "1-2 hours",
-    icon: "🏍️",
-    category: "Mechanic Services",
-  },
-  "AC Service": {
-    name: "AC Service",
-    description: "Car AC service",
-    price: 599,
-    duration: "1-2 hours",
-    icon: "❄️",
-    category: "Mechanic Services",
-  },
-  "Oil Change": {
-    name: "Oil Change",
-    description: "Engine oil change",
-    price: 299,
-    duration: "30-60 min",
-    icon: "🛢️",
-    category: "Mechanic Services",
-  },
-  "Tire Service": {
-    name: "Tire Service",
-    description: "Tire repair and replacement",
-    price: 399,
-    duration: "1-2 hours",
-    icon: "🛞",
-    category: "Mechanic Services",
-  },
-};
+// Use the shared service details instead of duplicating
+const SERVICE_DETAILS: Record<string, ServiceDetails> = ALL_SERVICES;
 
 // Memoized function to parse duration to minutes
 const parseDurationToMinutes = (duration: string): number => {
@@ -556,6 +42,8 @@ const ServiceBookingPage: React.FC = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { addToCart, cart } = useCart();
+  const { user, isSignedIn, isLoaded } = useUser();
+  const { signIn } = useSignIn();
 
   // State management
   const [selectedPaymentMethod, setSelectedPaymentMethod] =
@@ -597,6 +85,38 @@ const ServiceBookingPage: React.FC = () => {
 
     return () => clearTimeout(timer);
   }, []);
+
+  // Show loading while Clerk is loading user data
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen bg-white mt-28 flex items-center justify-center">
+        <PageLoadAnimation />
+      </div>
+    );
+  }
+
+  // Show sign-in prompt if user is not signed in
+  if (!isSignedIn) {
+    return (
+      <div className="min-h-screen bg-white mt-28 flex items-center justify-center">
+        <div className="max-w-md mx-auto text-center p-8">
+          <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Sign In Required</h2>
+          <p className="text-gray-600 mb-6">Please sign in to book this service.</p>
+          <button
+            onClick={() => signIn()}
+            className="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors duration-200"
+          >
+            Sign In to Continue
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Fetch address on mount
   useEffect(() => {
@@ -655,20 +175,23 @@ const ServiceBookingPage: React.FC = () => {
     console.log("💳 [BOOKING] Payment method:", selectedPaymentMethod);
     console.log("📍 [BOOKING] Address:", address);
 
-    if (!user) {
-      console.log("❌ [BOOKING] No user, attempting sign in...");
+    // Check if user is signed in
+    if (!isSignedIn || !user) {
+      console.log("❌ [BOOKING] User not signed in, redirecting to sign in...");
       try {
         await signIn();
       } catch (err) {
         console.error("❌ [BOOKING] Sign-in failed:", err);
-        alert("Sign-in failed. Please try again.");
+        alert("Please sign in to continue with booking.");
       }
       return;
     }
 
-    if (!user.email) {
-      console.error("❌ [BOOKING] No user email");
-      alert("User email is required. Please sign in again.");
+    // Check if user has email (with better error handling)
+    const userEmail = user.primaryEmailAddress?.emailAddress || user.emailAddresses?.[0]?.emailAddress;
+    if (!userEmail) {
+      console.error("❌ [BOOKING] No user email found");
+      alert("Email address not found. Please update your profile or sign in again.");
       return;
     }
 
@@ -699,6 +222,7 @@ const ServiceBookingPage: React.FC = () => {
     }
   }, [
     user,
+    isSignedIn,
     signIn,
     selectedPaymentMethod,
     currentService,
@@ -844,6 +368,24 @@ const ServiceBookingPage: React.FC = () => {
               <h2 className="text-2xl font-bold mb-6 passion-one-black text-gray-800">
                 Booking Summary
               </h2>
+              
+              {/* User Info */}
+              <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                    <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-green-800">Signed in as</div>
+                    <div className="text-sm text-green-700">
+                      {user?.primaryEmailAddress?.emailAddress || user?.emailAddresses?.[0]?.emailAddress || 'Loading...'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
               {/* Address Input */}
               <div className="mb-6">
                 <label className="block text-gray-700 font-medium mb-2">
