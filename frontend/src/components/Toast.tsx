@@ -27,7 +27,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const showToast = useCallback((message: string, type: ToastType = 'info', position: ToastPosition = 'top-right') => {
-    const id = Date.now();
+    const id = Date.now() + Math.random();
     setToasts(prev => [...prev, { toast: { id, message, type }, position }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(({ toast }) => toast.id !== id));
@@ -68,15 +68,15 @@ const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, position }) => 
   const getPositionClasses = () => {
     switch (adjustedPosition) {
       case 'top-left':
-        return 'top-4 left-4';
+        return 'top-20 left-4';
       case 'top-right':
-        return 'top-4 right-4';
+        return 'top-20 right-4';
       case 'bottom-left':
         return 'bottom-4 left-4';
       case 'bottom-right':
         return 'bottom-4 right-4';
       case 'top':
-        return 'top-4 left-1/2 transform -translate-x-1/2';
+        return 'top-20 left-1/2 transform -translate-x-1/2';
       case 'bottom':
         return 'bottom-4 left-1/2 transform -translate-x-1/2';
       case 'center':

@@ -19,6 +19,8 @@ import {
 import { ModernInput, ModernButton } from "@/components/ModernUI";
 import mockWorkers from './mockWorkers';
 import { ALL_SERVICES, type ServiceDetails } from "@/lib/services";
+import { loadStripe } from '@stripe/stripe-js';
+import { createCustomerPayment } from '@/lib/stripe';
 
 // Use the shared service details instead of duplicating
 const SERVICE_DETAILS: Record<string, ServiceDetails> = ALL_SERVICES;
@@ -46,6 +48,11 @@ const ServiceBookingPage: React.FC = () => {
   const { user, isSignedIn, isLoaded } = useUser();
   const { signIn } = useSignIn();
   const { showToast } = useToast();
+
+  // Initialize Stripe at the beginning to maintain hook order
+  const stripePromise = useMemo(() => {
+    return loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+  }, []);
 
   // State management
   const [selectedPaymentMethod, setSelectedPaymentMethod] =
@@ -76,6 +83,10 @@ const ServiceBookingPage: React.FC = () => {
   const [addressLoading, setAddressLoading] = useState<boolean>(true);
   const [addressError, setAddressError] = useState<string>("");
 
+  // New state for job data
+  const [jobDataForBooking, setJobDataForBooking] = useState<any>(null);
+  const [userDataForBooking, setUserDataForBooking] = useState<any>(null);
+
   // Get service name from URL params
   const serviceName = searchParams.get("service");
 
@@ -87,38 +98,6 @@ const ServiceBookingPage: React.FC = () => {
 
     return () => clearTimeout(timer);
   }, []);
-
-  // Show loading while Clerk is loading user data
-  if (!isLoaded) {
-    return (
-      <div className="min-h-screen bg-white mt-28 flex items-center justify-center">
-        <PageLoadAnimation />
-      </div>
-    );
-  }
-
-  // Show sign-in prompt if user is not signed in
-  if (!isSignedIn) {
-    return (
-      <div className="min-h-screen bg-white mt-28 flex items-center justify-center">
-        <div className="max-w-md mx-auto text-center p-8">
-          <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-          </div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Sign In Required</h2>
-          <p className="text-gray-600 mb-6">Please sign in to book this service.</p>
-          <button
-            onClick={() => signIn()}
-            className="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors duration-200"
-          >
-            Sign In to Continue
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   // Fetch address on mount
   useEffect(() => {
@@ -166,10 +145,6 @@ const ServiceBookingPage: React.FC = () => {
     return currentService.price - discount;
   }, [currentService.price, discount]);
 
-  // New state for job data
-  const [jobDataForBooking, setJobDataForBooking] = useState<any>(null);
-  const [userDataForBooking, setUserDataForBooking] = useState<any>(null);
-
   // Optimized booking handler with useCallback and cool animations
   const handleBooking = useCallback(async () => {
     console.log("🚀 [BOOKING] Starting booking process...");
@@ -211,16 +186,74 @@ const ServiceBookingPage: React.FC = () => {
       setBookingStage("initiating");
 
       try {
-        // Simulate booking and assign a random worker
-        const randomWorker = mockWorkers[Math.floor(Math.random() * mockWorkers.length)];
-        setTimeout(() => {
-          setIsBookingConfirmed(false);
-          setBookingStage("idle");
-          setAddress("");
-          showToast('Booking confirmed! Redirecting to worker assignment...', 'success');
-          router.push(`/booking/worker-assigned?id=${randomWorker.id}`);
-        }, 1500);
+        if (selectedPaymentMethod === "online") {
+          // Handle online payment - redirect to Stripe
+          console.log("💳 [BOOKING] Processing online payment...");
+          console.log("🔑 [BOOKING] Stripe key configured:", !!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
+          showToast('Redirecting to secure payment...', 'info');
+          
+          // Test mode: bypass Stripe only if key is missing
+          const isTestMode = !process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+          
+          if (isTestMode) {
+            console.log('Test mode: Stripe key not configured, simulating payment');
+            showToast('Test mode: Payment would be processed', 'success');
+            setTimeout(() => {
+              setIsBookingConfirmed(false);
+              setBookingStage("idle");
+              router.push(`/booking/payment-success?session_id=test_session_${Date.now()}`);
+            }, 1500);
+            return;
+          }
+          
+          console.log('🔗 [BOOKING] Creating Stripe payment session...');
+          try {
+            const { sessionId } = await createCustomerPayment(
+              finalPrice,
+              currentService.name,
+              userEmail,
+              user.id
+            );
+            
+            console.log('✅ [BOOKING] Payment session created:', sessionId);
+            
+            // Redirect to Stripe Checkout
+            const stripe = await stripePromise;
+            if (stripe) {
+              console.log('🔄 [BOOKING] Redirecting to Stripe checkout...');
+              const { error } = await stripe.redirectToCheckout({ sessionId });
+              if (error) {
+                console.error('❌ [BOOKING] Stripe redirect error:', error);
+                showToast('Payment failed. Please try again.', 'error');
+                setIsBookingConfirmed(false);
+                setBookingStage("idle");
+              }
+            } else {
+              throw new Error('Stripe failed to load');
+            }
+          } catch (paymentError) {
+            console.error('❌ [BOOKING] Payment creation failed:', paymentError);
+            showToast('Payment service unavailable. Please try cash on delivery.', 'error');
+            setIsBookingConfirmed(false);
+            setBookingStage("idle");
+          }
+        } else {
+          // Handle cash on delivery - direct to worker assignment
+          console.log("💵 [BOOKING] Processing cash on delivery...");
+          showToast('Processing cash on delivery booking...', 'info');
+          
+          // Simulate booking and assign a random worker
+          const randomWorker = mockWorkers[Math.floor(Math.random() * mockWorkers.length)];
+          setTimeout(() => {
+            setIsBookingConfirmed(false);
+            setBookingStage("idle");
+            setAddress("");
+            showToast('Booking confirmed! Redirecting to worker assignment...', 'success');
+            router.push(`/booking/worker-assigned?id=${randomWorker.id}`);
+          }, 1500);
+        }
       } catch (error) {
+        console.error("❌ [BOOKING] Booking failed:", error);
         setIsBookingConfirmed(false);
         setBookingStage("idle");
         showToast('Booking failed. Please try again.', 'error');
@@ -241,6 +274,7 @@ const ServiceBookingPage: React.FC = () => {
     couponApplied,
     coupon,
     showToast,
+    stripePromise,
   ]);
 
   // Handler for when workers are found
@@ -279,6 +313,38 @@ const ServiceBookingPage: React.FC = () => {
       showToast('Service is already in your cart!', 'info');
     }
   }, [isInCart, addToCart, currentService, showToast]);
+
+  // Show loading while Clerk is loading user data
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen bg-white mt-28 flex items-center justify-center">
+        <PageLoadAnimation />
+      </div>
+    );
+  }
+
+  // Show sign-in prompt if user is not signed in
+  if (!isSignedIn) {
+    return (
+      <div className="min-h-screen bg-white mt-28 flex items-center justify-center">
+        <div className="max-w-md mx-auto text-center p-8">
+          <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Sign In Required</h2>
+          <p className="text-gray-600 mb-6">Please sign in to book this service.</p>
+          <button
+            onClick={() => signIn()}
+            className="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors duration-200"
+          >
+            Sign In to Continue
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Show page loading animation
   if (isPageLoading) {

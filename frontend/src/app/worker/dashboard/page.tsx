@@ -6,7 +6,9 @@ import dynamic from "next/dynamic";
 import styles from "./dashboard.module.css";
 import { useJobTracking } from "@/lib/jobTracking";
 import { useToast } from '@/components/Toast';
+import { getWorkerSubscription, type WorkerSubscription } from '@/lib/stripe';
 import { PageLoadAnimation, PulsingDots } from "@/components/LoadingAnimations";
+import PaymentModal from "./PaymentModal";
 import "leaflet/dist/leaflet.css";
 import {
   FiUser,
@@ -30,6 +32,7 @@ import {
   FiPower,
   FiArchive,
   FiXCircle,
+  FiCreditCard,
 } from "react-icons/fi";
 import ThemeToggle from "./ThemeToggle";
 
@@ -178,6 +181,12 @@ export default function WorkerDashboardPage() {
   const [goalInput, setGoalInput] = useState("2000");
   const [isEditingGoal, setIsEditingGoal] = useState(false);
 
+  // Payment and subscription state
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
+  const [isCheckingSubscription, setIsCheckingSubscription] = useState(true);
+  const [workerId, setWorkerId] = useState<string>('');
+
   // Connect to socket when component mounts
   useEffect(() => {
     connectSocket();
@@ -297,6 +306,58 @@ export default function WorkerDashboardPage() {
         navigator.geolocation.clearWatch(watchIdRef.current);
     };
   }, [isLive]);
+
+  // Check subscription status on component mount
+  useEffect(() => {
+    checkSubscriptionStatus();
+  }, []);
+
+  const checkSubscriptionStatus = async () => {
+    try {
+      setIsCheckingSubscription(true);
+      // Generate a worker ID (you might want to get this from user profile or create one)
+      const generatedWorkerId = `worker_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      setWorkerId(generatedWorkerId);
+      
+      // For now, let's set it to false to test the payment flow
+      // In production, you would check against your backend
+      setHasActiveSubscription(false);
+      
+      // Uncomment this when you have the backend API working:
+      // const subscription = await getWorkerSubscription(generatedWorkerId);
+      // setHasActiveSubscription(subscription?.status === 'active');
+    } catch (error) {
+      console.error('Error checking subscription:', error);
+      setHasActiveSubscription(false);
+    } finally {
+      setIsCheckingSubscription(false);
+    }
+  };
+
+  const handleGoLiveClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    console.log('Go Live clicked, hasActiveSubscription:', hasActiveSubscription);
+    
+    if (!hasActiveSubscription) {
+      console.log('Opening payment modal...');
+      setShowPaymentModal(true);
+      showToast('Please subscribe to a plan to go online', 'warning');
+    } else {
+      if (isLive) {
+        stopLocationTracking();
+      } else {
+        startLocationTracking();
+      }
+    }
+  };
+
+  const handleSubscriptionComplete = () => {
+    setShowPaymentModal(false);
+    setHasActiveSubscription(true);
+    showToast('Subscription completed! You can now go online', 'success');
+  };
 
   const fetchRoute = async (
     start: { lat: number; lng: number },
@@ -429,6 +490,12 @@ export default function WorkerDashboardPage() {
       return;
     }
 
+    if (!hasActiveSubscription) {
+      showToast('Please subscribe to a plan to go online', 'warning');
+      setShowPaymentModal(true);
+      return;
+    }
+
     setIsLive(true);
     showToast('Location tracking started. You are now live!', 'success');
 
@@ -469,6 +536,14 @@ export default function WorkerDashboardPage() {
 
   return (
     <>
+      {/* Payment Modal */}
+      <PaymentModal
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        workerId={workerId}
+        onSubscriptionComplete={handleSubscriptionComplete}
+      />
+
       {isJobIncoming && (
         <div className={styles.modalOverlay}>
           <div className={styles.modalContent}>
@@ -524,11 +599,29 @@ export default function WorkerDashboardPage() {
                 className={`${styles.iconButton} ${styles.goLiveButton} ${
                   isLive ? styles.live : ""
                 }`}
-                onClick={() => setIsLive(!isLive)}
+                onClick={handleGoLiveClick}
                 title={isLive ? "Go Offline" : "Go Live"}
+                disabled={isCheckingSubscription}
               >
                 <FiRadio />
+                {!hasActiveSubscription && !isCheckingSubscription && (
+                  <FiCreditCard className="absolute -top-1 -right-1 text-yellow-500" size={12} />
+                )}
               </button>
+              
+              {/* Test button for payment modal */}
+              <button
+                className={styles.iconButton}
+                onClick={() => {
+                  console.log('Test button clicked - opening payment modal');
+                  setShowPaymentModal(true);
+                }}
+                title="Test Payment Modal"
+                style={{ backgroundColor: '#ff6b6b', color: 'white' }}
+              >
+                💳
+              </button>
+              
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
               <button
                 className={styles.iconButton}
@@ -567,6 +660,40 @@ export default function WorkerDashboardPage() {
               </button>
             </div>
           </header>
+
+          {/* Subscription Status Banner */}
+          {!hasActiveSubscription && !isCheckingSubscription && (
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <FiCreditCard className="text-yellow-400 mr-3" size={20} />
+                  <div>
+                    <p className="text-yellow-800 font-medium">
+                      Subscribe to go online and start receiving job requests
+                    </p>
+                    <button
+                      onClick={() => {
+                        console.log('Opening payment modal from banner...');
+                        setShowPaymentModal(true);
+                      }}
+                      className="mt-2 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors text-sm"
+                    >
+                      View Plans
+                    </button>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    console.log('Debug: Setting hasActiveSubscription to true');
+                    setHasActiveSubscription(true);
+                  }}
+                  className="px-3 py-1 bg-gray-500 text-white rounded text-xs"
+                >
+                  Debug: Skip Payment
+                </button>
+              </div>
+            </div>
+          )}
 
           <main className={styles.contentGrid}>
             <div className={`${styles.card} ${styles.mapCard}`}>
