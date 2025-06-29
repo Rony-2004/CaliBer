@@ -22,6 +22,18 @@ SUBCATEGORY_MAP = {
     "women_grooming": ["Facial", "Hair Color", "Body Massage", "Manicure", "Pedicure"],
 }
 
+# Restrict to only the first 4 subcategories for each category
+ALLOWED_SUBCATEGORIES = {
+    "plumber": ["tape_repair", "leak_fixing", "pipe_installation", "drain_cleaning"],
+    "electrician": ["electrical_repair", "wiring_installation", "switch_and_socket_repair", "fan_installation"],
+    "carpenter": ["wood_work", "furniture_assembly", "road_repair", "window_repair"],
+    "mechanic": ["car_service", "bike_service", "emergency_service", "tire_change"],
+    "mens_grooming": ["haircut", "saving", "full_body_massage", "facial"],
+    "women_grooming": ["facial", "hair_color", "body_massage", "car_service"],
+}
+
+ALLOWED_CATEGORIES = set(ALLOWED_SUBCATEGORIES.keys())
+
 # Keyword mapping for category detection
 KEYWORD_MAPPING = {
     # Plumber keywords
@@ -243,19 +255,21 @@ def get_service_keyword_fallback(user_prompt: str, file_path: Optional[str] = No
     try:
         # Find category
         detected_category = find_category(user_prompt)
-        
-        if not detected_category:
-            raise ValueError(f"Could not determine service category for: '{user_prompt}'")
+        if detected_category not in ALLOWED_CATEGORIES:
+            detected_category = list(ALLOWED_CATEGORIES)[0]  # fallback to first allowed
 
         # Find subcategory
         detected_subcategory = find_subcategory(detected_category, user_prompt)
-        
+        allowed_subs = ALLOWED_SUBCATEGORIES[detected_category]
+        if detected_subcategory not in allowed_subs:
+            detected_subcategory = allowed_subs[0]  # fallback to first allowed
+
         # Get category name
         category_name = next((cat['name'] for cat in CATEGORIES if cat['id'] == detected_category), detected_category)
-        
+
         # Fetch workers from backend
         workers_data = get_workers_by_specialization(detected_category, detected_subcategory)
-        
+
         return {
             "category": detected_category,
             "categoryName": category_name,
