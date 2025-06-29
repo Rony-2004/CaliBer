@@ -270,7 +270,7 @@ export default function App() {
             <Link href="/" className="flex-shrink-0 flex items-center">
               <div className="relative w-[120px] h-[60px] sm:w-[150px] sm:h-[80px]">
                 <Image
-                  src="/Assets/a.jpg"
+                  src="/Assets/logo.png"
                   alt="Go-Fix-O Logo"
                   fill
                   className="object-contain"
