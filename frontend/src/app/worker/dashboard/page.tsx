@@ -33,6 +33,7 @@ import {
 import ThemeToggle from "./ThemeToggle";
 import { useWorkerDashboard } from "./useWorkerDashboard";
 import socketManager from "@/lib/socket";
+import GoLiveButton from "./GoLiveButton";
 
 const WorkerMap = dynamic(() => import("./WorkerMap"), {
   ssr: false,
@@ -104,6 +105,8 @@ export default function WorkerDashboardPage() {
               <button
                 onClick={handleDeclineJob}
                 className={styles.closeModalButton}
+                title="Close job offer"
+                aria-label="Close job offer"
               >
                 <FiX />
               </button>
@@ -401,13 +404,10 @@ export default function WorkerDashboardPage() {
                         : "Go live to start receiving job alerts from clients."}
                     </p>
                     {!isLive && (
-                      <button
-                        className={`${styles.jobButton} ${styles.goLiveCardButton}`}
+                      <GoLiveButton
                         onClick={toggleLiveStatus}
                         disabled={!workerId}
-                      >
-                        <FiRadio /> Go Live
-                      </button>
+                      />
                     )}
                   </div>
                 )}
