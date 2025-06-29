@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useRef, useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
@@ -51,6 +52,7 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose }) => {
   const videoInputRef = useRef<HTMLInputElement>(null);
   const galleryVideoInputRef = useRef<HTMLInputElement>(null);
   const [showVideoMenu, setShowVideoMenu] = useState(false);
+  const router = useRouter();
 
   const handleClose = () => {
     if(isListening) { recognitionRef.current?.stop(); }
@@ -61,6 +63,40 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose }) => {
   useEffect(() => {
     if (!isOpen) { setDescription(''); setFile(null); setResult(null); setError(''); setIsLoading(false); }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (result && (result.worker_names?.length ?? 0) > 0 && result.category && result.subcategory) {
+      const format = (str: string) => str.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      const SUBCATEGORY_DISPLAY_MAP: Record<string, string> = {
+        tape_repair: "Tap Repair",
+        leak_fixing: "Leak Fixing",
+        pipe_installation: "Pipe Installation",
+        drain_cleaning: "Drain Cleaning",
+        electrical_repair: "Electrical Repair",
+        wiring_installation: "Wiring Installation",
+        switch_and_socket_repair: "Switch & Socket Repair",
+        fan_installation: "Fan Installation",
+        wood_work: "Wood Work",
+        furniture_assembly: "Furniture Assembly",
+        road_repair: "Road Repair",
+        window_repair: "Window Repair",
+        car_service: "Car Service",
+        bike_service: "Bike Service",
+        emergency_service: "Emergency Service",
+        tire_change: "Tire Change",
+        haircut: "Haircut",
+        saving: "Shaving",
+        full_body_massage: "Full Body Massage",
+        facial: "Facial",
+        hair_color: "Hair Color",
+        body_massage: "Body Massage",
+      };
+      const categoryFormatted = format(result.category);
+      const subcategoryFormatted = SUBCATEGORY_DISPLAY_MAP[result.subcategory] || format(result.subcategory);
+      const url = `/booking/services?service=${encodeURIComponent(subcategoryFormatted)}&category=${encodeURIComponent(categoryFormatted)}`;
+      router.push(url);
+    }
+  }, [result, router]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'video') => {
     const selectedFile = event.target.files?.[0];

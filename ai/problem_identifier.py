@@ -140,6 +140,32 @@ KEYWORD_MAPPING = {
     "haircolour": "women_grooming",
 }
 
+# Add synonym keywords for better subcategory matching
+SUBCATEGORY_SYNONYMS = {
+    "tape_repair": ["tap repair", "tape repair", "tap", "faucet"],
+    "leak_fixing": ["leak", "leaking", "leak fixing", "drip", "water leak"],
+    "pipe_installation": ["pipe", "pipe installation", "install pipe"],
+    "drain_cleaning": ["drain", "drain cleaning", "clog", "unclog"],
+    "electrical_repair": ["electrical repair", "electric repair", "electrician", "electric"],
+    "wiring_installation": ["wiring", "wire", "wiring installation", "install wire"],
+    "switch_and_socket_repair": ["switch", "socket", "switch repair", "socket repair"],
+    "fan_installation": ["fan", "fan installation", "install fan"],
+    "wood_work": ["wood", "wood work", "carpenter"],
+    "furniture_assembly": ["furniture", "furniture assembly", "assemble furniture"],
+    "road_repair": ["road", "road repair", "pothole"],
+    "window_repair": ["window", "window repair"],
+    "car_service": ["car", "car service", "car repair"],
+    "bike_service": ["bike", "bike service", "bike repair"],
+    "emergency_service": ["emergency", "urgent", "emergency service"],
+    "tire_change": ["tire", "tyre", "tire change", "tyre change"],
+    "haircut": ["haircut", "cut hair", "hair cut"],
+    "saving": ["shave", "saving", "beard"],
+    "full_body_massage": ["massage", "body massage", "full body massage"],
+    "facial": ["facial", "face treatment"],
+    "hair_color": ["hair color", "color hair", "dye hair"],
+    "body_massage": ["body massage", "massage"],
+}
+
 def find_category(user_prompt: str) -> str:
     """Find the category based on user prompt"""
     user_prompt_lower = user_prompt.lower()
@@ -151,35 +177,23 @@ def find_category(user_prompt: str) -> str:
     return None
 
 def find_subcategory(category: str, user_prompt: str) -> str:
-    """Find the best matching subcategory"""
-    if category not in SUBCATEGORY_MAP:
+    """Find the best matching subcategory from allowed subcategories for the category, using synonyms and keyword matching"""
+    if category not in ALLOWED_SUBCATEGORIES:
         return None
-    
-    subcategories = SUBCATEGORY_MAP[category]
+    allowed_subs = ALLOWED_SUBCATEGORIES[category]
     user_prompt_lower = user_prompt.lower()
-    
-    best_match = None
-    best_score = 0
-    
-    for subcategory in subcategories:
-        subcategory_lower = subcategory.lower()
-        score = 0
-        
-        # Check for exact word matches
-        for word in subcategory_lower.split():
+    # Try to match using synonyms first
+    for sub in allowed_subs:
+        for synonym in SUBCATEGORY_SYNONYMS.get(sub, []):
+            if synonym in user_prompt_lower:
+                return sub
+    # Try to match any word in the subcategory name
+    for sub in allowed_subs:
+        for word in sub.replace('_', ' ').split():
             if word in user_prompt_lower:
-                score += 1
-        
-        # Check for partial matches
-        for word in user_prompt_lower.split():
-            if any(word in sub for sub in subcategory_lower.split()):
-                score += 0.5
-        
-        if score > best_score:
-            best_score = score
-            best_match = subcategory
-    
-    return best_match if best_score > 0 else None
+                return sub
+    # Fallback to first allowed if no match
+    return allowed_subs[0]
 
 def get_workers_by_specialization(category: str, subcategory: str = None) -> Dict:
     """Fetch workers from backend by specialization. If no workers found for subcategory, fallback to category only."""
