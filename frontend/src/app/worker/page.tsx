@@ -75,6 +75,7 @@ export default function WorkerGatewayPage() {
   const [isClient, setIsClient] = useState(false);
 
   const [hasIntroPlayed, setHasIntroPlayed] = useState(false);
+  const [hover, setHover] = useState(false);
 
   // Set client flag and check sessionStorage
   useEffect(() => {
@@ -131,20 +132,30 @@ export default function WorkerGatewayPage() {
   }
 
   return (
-    <div className={styles.pageWrapper}>
-      <div className={styles.container}>
-        <div className={styles.logo}>W</div>
-        <h1 className={styles.title}>Worker Portal</h1>
-        <p className={styles.subtitle}>
-          Sign in or create an account to manage your profile and jobs.
-        </p>
-        <div className={styles.buttonContainer}>
-          <button
-            onClick={() => (window.location.href = "/")}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-          >
-            Sign In
-          </button>
+    <div style={{ background: '#fff', minHeight: '100vh', width: '100vw' }}>
+      <div style={{ background: '#fff', minHeight: '100vh', width: '100vw', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className={styles.container} style={{ background: '#fff' }}>
+          <div className={styles.logo} style={{ background: '#FACC15', color: '#fff', fontWeight: 700, fontSize: '2.2rem', width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px auto', boxShadow: '0 2px 8px rgba(250,204,21,0.10)' }}>W</div>
+          <h1 className={styles.title} style={{ color: '#1E1B4B', fontWeight: 700, fontSize: '2.2rem', marginBottom: 12 }}>Worker Portal</h1>
+          <p className={styles.subtitle} style={{ color: '#444', fontSize: '1.1rem', marginBottom: 32 }}>
+            Sign in or create an account to manage your profile and jobs.
+          </p>
+          <div className={styles.buttonContainer}>
+            <button
+              onClick={() => (window.location.href = "/")}
+              style={{
+                background: hover ? '#fde047' : '#FACC15',
+                color: hover ? '#b45309' : '#fff',
+                fontWeight: 600,
+                transition: 'background 0.18s, color 0.18s',
+              }}
+              className="font-bold py-2 px-4 rounded"
+              onMouseEnter={() => setHover(true)}
+              onMouseLeave={() => setHover(false)}
+            >
+              Sign In
+            </button>
+          </div>
         </div>
       </div>
     </div>
