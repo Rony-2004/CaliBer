@@ -15,7 +15,7 @@ const getNearbyWorkers = async (
   try {
     // Calculate bounding box for efficient querying
     const latDelta = radius / 111.32; // 1 degree = 111.32 km
-    const lngDelta = radius / (111.32 * Math.cos(lat * Math.PI / 180));
+    const lngDelta = radius / (111.32 * Math.cos((lat * Math.PI) / 180));
 
     const latMin = lat - latDelta;
     const latMax = lat + latDelta;
@@ -35,7 +35,7 @@ const getNearbyWorkers = async (
     if (jobCategory) {
       baseConditions = and(
         baseConditions,
-        sql`(${specializations.category} = ${jobCategory} OR ${specializations.category} = 'general' OR ${specializations.category} IS NULL)`
+        sql`(${specializations.category} = ${jobCategory} OR ${specializations.category} IS NULL)`
       );
     }
 
@@ -51,7 +51,7 @@ const getNearbyWorkers = async (
         lastUpdated: liveLocations.createdAt,
         specialization: specializations.category,
         isPrimary: specializations.isPrimary,
-        proficiency: specializations.proficiency
+        proficiency: specializations.proficiency,
       })
       .from(workers)
       .innerJoin(liveLocations, eq(workers.id, liveLocations.workerId))
@@ -71,13 +71,13 @@ const getNearbyWorkers = async (
           )
         )`)
       )
-      .limit(10);      
+      .limit(10);
 
     // Filter by actual distance and add distance property
     const workersWithDistance = foundWorkers
       .map((worker: any) => ({
         ...worker,
-        distance: calculateDistance(lat, lng, worker.lat!, worker.lng!)
+        distance: calculateDistance(lat, lng, worker.lat!, worker.lng!),
       }))
       .filter((worker: any) => worker.distance <= radius)
       .sort((a: any, b: any) => a.distance - b.distance);
@@ -102,13 +102,14 @@ export const initJobSubscriber = async () => {
         );
 
         const job = JSON.parse(message);
-        const { lat, lng, userId, description, id: jobId } = job;
+        const { lat, lng, userId, description, id: jobId, specializations: jobSpecializations } = job;
 
         console.log("📋 [JOB_PROCESSING] Processing job:", {
           jobId,
           description: description?.substring(0, 50) + "...",
           location: { lat, lng },
           userId,
+          specializations: jobSpecializations,
         });
 
         // Extract potential job category from description
@@ -125,7 +126,9 @@ export const initJobSubscriber = async () => {
           jobDescription.includes("pipe") ||
           jobDescription.includes("water") ||
           jobDescription.includes("bathroom") ||
-          jobDescription.includes("kitchen")
+          jobDescription.includes("kitchen") ||
+          jobDescription.includes("leak") ||
+          jobDescription.includes("sink")
         ) {
           jobCategory = "plumber";
         } else if (
@@ -137,13 +140,6 @@ export const initJobSubscriber = async () => {
         ) {
           jobCategory = "electrician";
         } else if (
-          jobDescription.includes("clean") ||
-          jobDescription.includes("housekeeping") ||
-          jobDescription.includes("maid") ||
-          jobDescription.includes("dusting")
-        ) {
-          jobCategory = "cleaning";
-        } else if (
           jobDescription.includes("carpent") ||
           jobDescription.includes("wood") ||
           jobDescription.includes("furniture") ||
@@ -152,50 +148,69 @@ export const initJobSubscriber = async () => {
         ) {
           jobCategory = "carpenter";
         } else if (
-          jobDescription.includes("paint") ||
-          jobDescription.includes("wall") ||
-          jobDescription.includes("color")
+          jobDescription.includes("mechanic") ||
+          jobDescription.includes("car") ||
+          jobDescription.includes("bike") ||
+          jobDescription.includes("vehicle") ||
+          jobDescription.includes("repair")
         ) {
-          jobCategory = "painter";
-        } else if (
-          jobDescription.includes("ac") ||
-          jobDescription.includes("air") ||
-          jobDescription.includes("cooling") ||
-          jobDescription.includes("refrigerator")
-        ) {
-          jobCategory = "ac_repair";
+          jobCategory = "mechanic";
         } else if (
           jobDescription.includes("hair") ||
           jobDescription.includes("salon") ||
           jobDescription.includes("beauty") ||
           jobDescription.includes("treatment") ||
-          jobDescription.includes("styling")
+          jobDescription.includes("styling") ||
+          jobDescription.includes("grooming")
         ) {
-          jobCategory = "beauty"; // Add beauty category
+          // Determine if it's men's or women's grooming based on context
+          if (
+            jobDescription.includes("men") ||
+            jobDescription.includes("male")
+          ) {
+            jobCategory = "mens_grooming";
+          } else if (
+            jobDescription.includes("women") ||
+            jobDescription.includes("female")
+          ) {
+            jobCategory = "women_grooming";
+          } else {
+            // Default to mens_grooming if gender is not specified
+            jobCategory = "mens_grooming";
+          }
         } else {
-          // If no specific category found, use general
-          jobCategory = undefined;
+          // If no specific category found from description, use the job's specializations field
+          jobCategory = jobSpecializations;
         }
 
         console.log(
           "🏷️ [CATEGORY_DETECTION] Detected category:",
-          jobCategory || "general"
+          jobCategory || "no specific category"
         );
 
         // Wait a bit for workers to come online and join their rooms
         await new Promise((resolve) => setTimeout(resolve, 2000));
 
-        console.log("🔍 [WORKER_SEARCH] Starting worker search with progressive radius...");
+        console.log(
+          "🔍 [WORKER_SEARCH] Starting worker search with progressive radius..."
+        );
 
         // Progressive radius search (5km, 10km, 15km, 20km)
         const searchRadii = [5, 10, 15, 20];
         let foundWorkers: any[] = [];
 
         for (const radius of searchRadii) {
-          console.log(`🔍 [WORKER_SEARCH] Searching within ${radius}km radius...`);
+          console.log(
+            `🔍 [WORKER_SEARCH] Searching within ${radius}km radius...`
+          );
 
           try {
-            const nearbyWorkers = await getNearbyWorkers(lat, lng, radius, jobCategory);
+            const nearbyWorkers = await getNearbyWorkers(
+              lat,
+              lng,
+              radius,
+              jobCategory
+            );
 
             console.log(
               `📊 [WORKER_SEARCH] Found ${nearbyWorkers.length} workers within ${radius}km`
@@ -206,24 +221,32 @@ export const initJobSubscriber = async () => {
               break; // Found workers, stop searching
             }
           } catch (error) {
-            console.error(`❌ [WORKER_SEARCH] Error searching within ${radius}km:`, error);
+            console.error(
+              `❌ [WORKER_SEARCH] Error searching within ${radius}km:`,
+              error
+            );
           }
         }
 
         if (foundWorkers.length === 0) {
-          console.log(
-            `❌ [WORKER_SEARCH] No workers found for job ${jobId}`
-          );
+          console.log(`❌ [WORKER_SEARCH] No workers found for job ${jobId}`);
 
           // Wait a bit more and try one more time with broader search
           await new Promise((resolve) => setTimeout(resolve, 3000));
 
           try {
-            const nearbyWorkers = await getNearbyWorkers(lat, lng, 20, jobCategory);
+            const nearbyWorkers = await getNearbyWorkers(
+              lat,
+              lng,
+              20,
+              jobCategory
+            );
 
             if (nearbyWorkers.length > 0) {
               foundWorkers = nearbyWorkers;
-              console.log(`📊 [WORKER_SEARCH] Found ${nearbyWorkers.length} workers in final search`);
+              console.log(
+                `📊 [WORKER_SEARCH] Found ${nearbyWorkers.length} workers in final search`
+              );
             }
           } catch (error) {
             console.error("❌ [WORKER_SEARCH] Error in final search:", error);
@@ -231,9 +254,7 @@ export const initJobSubscriber = async () => {
         }
 
         if (foundWorkers.length === 0) {
-          console.log(
-            `❌ [WORKER_SEARCH] No workers found for job ${jobId}`
-          );
+          console.log(`❌ [WORKER_SEARCH] No workers found for job ${jobId}`);
           console.log("📤 [SOCKET_EMIT] Notifying user about no workers found");
 
           // Track no workers found
@@ -252,14 +273,14 @@ export const initJobSubscriber = async () => {
         foundWorkers.forEach((worker, index) => {
           const workerName = `${worker.firstName} ${worker.lastName}`;
           console.log(
-            `  ${index + 1}. ${workerName} - ${worker.distance.toFixed(2)}km away, ${worker.specialization || 'general'}`
+            `  ${index + 1}. ${workerName} - ${worker.distance.toFixed(
+              2
+            )}km away, ${worker.specialization || "no specialization"}`
           );
         });
 
         // Sort workers by distance (already sorted in getNearbyWorkers)
-        console.log(
-          "🔄 [WORKER_SORTING] Workers sorted by distance"
-        );
+        console.log("🔄 [WORKER_SORTING] Workers sorted by distance");
 
         // Limit to top 10 workers to avoid spam
         const topWorkers = foundWorkers.slice(0, 10);
@@ -287,7 +308,11 @@ export const initJobSubscriber = async () => {
         });
 
         // Track successful broadcast
-        broadcastMonitor.trackSuccessfulBroadcast(jobId, topWorkers.length, topWorkers.length);
+        broadcastMonitor.trackSuccessfulBroadcast(
+          jobId,
+          topWorkers.length,
+          topWorkers.length
+        );
 
         // Notify user about the broadcast
         console.log(
@@ -324,14 +349,21 @@ export const initJobSubscriber = async () => {
 };
 
 // Helper function to calculate distance between two points
-function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+function calculateDistance(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number
+): number {
   const R = 6371; // Earth's radius in kilometers
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }

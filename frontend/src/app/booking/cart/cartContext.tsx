@@ -22,10 +22,18 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [cart, setCart] = useState<CartService[]>([]);
+  const [isClient, setIsClient] = useState(false);
   const { showToast } = useToast();
 
-  // Load cart from localStorage on mount
+  // Set client flag to prevent hydration issues
   useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // Load cart from localStorage on mount (client-side only)
+  useEffect(() => {
+    if (!isClient) return;
+    
     try {
       const stored = localStorage.getItem('cart');
       if (stored) {
@@ -36,16 +44,18 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       console.error('Error loading cart from localStorage:', error);
       setCart([]);
     }
-  }, []);
+  }, [isClient]);
 
-  // Save cart to localStorage whenever it changes
+  // Save cart to localStorage whenever it changes (client-side only)
   useEffect(() => {
+    if (!isClient) return;
+    
     try {
       localStorage.setItem('cart', JSON.stringify(cart));
     } catch (error) {
       console.error('Error saving cart to localStorage:', error);
     }
-  }, [cart]);
+  }, [cart, isClient]);
 
   // Memoize cart calculations
   const cartTotal = useMemo(() => {

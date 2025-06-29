@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import styles from "./dashboard.module.css";
-import { useUser } from "@clerk/clerk-react"
+import { useUser } from "@clerk/clerk-react";
 import "leaflet/dist/leaflet.css";
 import JobRequestCard from "./jobRequestCard";
 import {
@@ -61,7 +61,7 @@ export default function WorkerDashboardPage() {
     goalInput,
     profile,
     workerId,
-    
+
     // Handlers
     toggleTheme,
     toggleLiveStatus,
@@ -117,7 +117,9 @@ export default function WorkerDashboardPage() {
                   </span>
                   {countdownTime > 0 && (
                     <span className={styles.countdown}>
-                      <FiClock size={14} /> Time remaining: {Math.floor(countdownTime / 60)}:{(countdownTime % 60).toString().padStart(2, '0')}
+                      <FiClock size={14} /> Time remaining:{" "}
+                      {Math.floor(countdownTime / 60)}:
+                      {(countdownTime % 60).toString().padStart(2, "0")}
                     </span>
                   )}
                 </div>
@@ -152,7 +154,17 @@ export default function WorkerDashboardPage() {
 
       {/* Debug info */}
       {showJobRequests && !jobRequest && (
-        <div style={{ position: 'fixed', top: '50%', left: '50%', background: 'white', padding: '20px', border: '1px solid black', zIndex: 1000 }}>
+        <div
+          style={{
+            position: "fixed",
+            top: "50%",
+            left: "50%",
+            background: "white",
+            padding: "20px",
+            border: "1px solid black",
+            zIndex: 1000,
+          }}
+        >
           <p>Debug: showJobRequests is true but jobRequest is null</p>
           <p>jobStatus: {jobStatus}</p>
           <p>isLive: {isLive.toString()}</p>
@@ -183,8 +195,8 @@ export default function WorkerDashboardPage() {
                 className={styles.iconButton}
                 title="Notifications"
                 onClick={() => {
-                  console.log('Notification clicked, jobRequest:', jobRequest);
-                  console.log('showJobRequests will be:', !showJobRequests);
+                  console.log("Notification clicked, jobRequest:", jobRequest);
+                  console.log("showJobRequests will be:", !showJobRequests);
                   setShowJobRequests(true);
                 }}
                 disabled={!isLive || jobStatus !== "idle"}
@@ -268,23 +280,29 @@ export default function WorkerDashboardPage() {
                 <div className={`${styles.card} ${styles.statCard}`}>
                   <div
                     className={styles.statIconContainer}
-                    style={{
-                      "--icon-bg-color": "rgba(16, 185, 129, 0.1)",
-                    } as React.CSSProperties}
+                    style={
+                      {
+                        "--icon-bg-color": "rgba(16, 185, 129, 0.1)",
+                      } as React.CSSProperties
+                    }
                   >
                     <FiDollarSign className={styles.statIcon} />
                   </div>
                   <div className={styles.statTextContainer}>
-                    <div className={styles.statValue}>₹{earnings.toFixed(2)}</div>
+                    <div className={styles.statValue}>
+                      ₹{earnings.toFixed(2)}
+                    </div>
                     <div className={styles.subtleHeader}>Earnings</div>
                   </div>
                 </div>
                 <div className={`${styles.card} ${styles.statCard}`}>
                   <div
                     className={styles.statIconContainer}
-                    style={{
-                      "--icon-bg-color": "rgba(59, 130, 246, 0.1)",
-                    } as React.CSSProperties}
+                    style={
+                      {
+                        "--icon-bg-color": "rgba(59, 130, 246, 0.1)",
+                      } as React.CSSProperties
+                    }
                   >
                     <FiClock className={styles.statIcon} />
                   </div>
@@ -298,9 +316,11 @@ export default function WorkerDashboardPage() {
                 <div className={`${styles.card} ${styles.statCard}`}>
                   <div
                     className={styles.statIconContainer}
-                    style={{
-                      "--icon-bg-color": "rgba(139, 92, 246, 0.1)",
-                    } as React.CSSProperties}
+                    style={
+                      {
+                        "--icon-bg-color": "rgba(139, 92, 246, 0.1)",
+                      } as React.CSSProperties
+                    }
                   >
                     <FiCheckCircle className={styles.statIcon} />
                   </div>
@@ -312,9 +332,11 @@ export default function WorkerDashboardPage() {
               </div>
 
               {/* Active Job Card */}
-              <div className={`${styles.card} ${styles.opportunitiesCard} ${
-                isJobAccepted ? styles.highlight : ""
-              }`}>
+              <div
+                className={`${styles.card} ${styles.opportunitiesCard} ${
+                  isJobAccepted ? styles.highlight : ""
+                }`}
+              >
                 <h3 className={styles.cardHeader}>
                   <FiBriefcase /> Active Job
                 </h3>

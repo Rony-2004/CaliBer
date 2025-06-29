@@ -120,17 +120,19 @@ const IconX = ({ size = 24, className = "" }) => (
 // Main Navbar Component
 export default function App() {
   const pathname = usePathname();
+
+  // Hide navbar on /worker route and all worker sub-routes (onboarding, dashboard, etc.)
+  // This must be before any hooks to avoid Rules of Hooks violation
+  if (pathname === "/worker" || pathname.startsWith("/worker/")) {
+    return null;
+  }
+
   const { showToast } = useToast();
   const { signOut } = useClerk();
   const { isSignedIn, user, isLoaded } = useUser();
 
   // Add user registration hook
   const { dbUser, isEnsuring, error: userError } = useEnsureUser();
-
-  // Hide navbar on /worker route and all worker sub-routes (onboarding, dashboard, etc.)
-  if (pathname === "/worker" || pathname.startsWith("/worker/")) {
-    return null;
-  }
 
   // --- STATE MANAGEMENT ---
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -139,6 +141,7 @@ export default function App() {
   const [location, setLocation] = useState("");
   const [autoLocation, setAutoLocation] = useState<string>("");
   const [isLocationPopupOpen, setIsLocationPopupOpen] = useState(false);
+  const [isClient, setIsClient] = useState(false);
 
   // --- REFS for Click Outside Logic ---
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
@@ -154,8 +157,15 @@ export default function App() {
   const router = useRouter();
   const { cart } = useCart();
 
+  // Set client flag to prevent hydration issues
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
   // --- EVENT HANDLERS & EFFECTS ---
   useEffect(() => {
+    if (!isClient) return; // Only run on client
+
     function handleClickOutside(event: MouseEvent) {
       if (
         profileMenuRef.current &&
@@ -174,9 +184,11 @@ export default function App() {
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [profileMenuRef, locationRef]);
+  }, [profileMenuRef, locationRef, isClient]);
 
   useEffect(() => {
+    if (!isClient) return; // Only run on client
+
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
@@ -195,7 +207,7 @@ export default function App() {
         () => {}
       );
     }
-  }, []);
+  }, [isClient]);
 
   // Show welcome toast when user signs in and is registered in backend
   useEffect(() => {
@@ -289,10 +301,8 @@ export default function App() {
               >
                 <IconMapPin size={18} className="text-gray-500" />
                 <span className="truncate text-gray-700 text-sm font-medium">
-                  {location
-                    ? location
-                    : autoLocation
-                    ? autoLocation
+                  {isClient && (location || autoLocation)
+                    ? location || autoLocation
                     : "Select Location"}
                 </span>
                 <IconChevronDown size={16} className="text-gray-400" />
