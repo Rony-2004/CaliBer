@@ -1,10 +1,8 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/clerk-react";
 import socketManager from "@/lib/socket";
 import polyline from "@mapbox/polyline";
-import { CircleMarker, Polyline, Marker, Popup } from "react-leaflet";
-import L from "leaflet";
 
 const OPENROUTESERVICE_API_KEY =
   "5b3ce3597851110001cf62481ff50d5207c04a54bed84f87a78c203f"; // <-- Set your OpenRouteService API key here
@@ -39,38 +37,7 @@ export const useWorkerDashboard = () => {
     imageUrl: null,
   });
   const [workerId, setWorkerId] = useState<string | null>(null);
-
-  // Worker icon for the map
-  const workerIcon = useMemo(
-    () =>
-      new L.Icon({
-        iconUrl:
-          "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png",
-        shadowUrl:
-          "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [1, -34],
-        shadowSize: [41, 41],
-      }),
-    []
-  );
-
-  // Job icon for the map
-  const jobIcon = useMemo(
-    () =>
-      new L.Icon({
-        iconUrl:
-          "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
-        shadowUrl:
-          "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [1, -34],
-        shadowSize: [41, 41],
-      }),
-    []
-  );
+  const [routeLoading, setRouteLoading] = useState(false);
 
   // Fetch worker profile
   const fetchWorkerProfile = useCallback(async (workerId: string) => {
@@ -126,8 +93,6 @@ export const useWorkerDashboard = () => {
     }
 
     const newStatus = !isLive;
-    let newLocation: { lat: number; lng: number } | null = null;
-
     try {
       // Get current location first
       if (newStatus) {
@@ -140,7 +105,7 @@ export const useWorkerDashboard = () => {
           }
         );
 
-        newLocation = {
+        const newLocation = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
         };
@@ -176,8 +141,8 @@ export const useWorkerDashboard = () => {
           },
           body: JSON.stringify({
             isActive: newStatus,
-            lat: newLocation?.lat || location?.lat,
-            lng: newLocation?.lng || location?.lng,
+            lat: location?.lat,
+            lng: location?.lng,
           }),
         }
       );
@@ -239,29 +204,6 @@ export const useWorkerDashboard = () => {
       console.log("Origin:", origin);
       console.log("Destination:", destination);
 
-      // Create intermediate waypoints for a more realistic route
-      const latDiff = destination[0] - origin[0];
-      const lngDiff = destination[1] - origin[1];
-
-      // Create 3-5 intermediate points to simulate road routing
-      const waypoints = [];
-      const numPoints = 4;
-
-      for (let i = 1; i < numPoints; i++) {
-        const progress = i / numPoints;
-        // Add some randomness to simulate road curves
-        const randomLat = (Math.random() - 0.5) * 0.002;
-        const randomLng = (Math.random() - 0.5) * 0.002;
-
-        waypoints.push([
-          origin[0] + latDiff * progress + randomLat,
-          origin[1] + lngDiff * progress + randomLng,
-        ]);
-      }
-
-      const allCoordinates = [origin, ...waypoints, destination];
-      console.log("🗺️ Route coordinates:", allCoordinates);
-
       const response = await fetch(
         `https://api.openrouteservice.org/v2/directions/driving-car`,
         {
@@ -272,25 +214,17 @@ export const useWorkerDashboard = () => {
             Accept: "application/json",
           },
           body: JSON.stringify({
-            coordinates: allCoordinates.map((coord) => [coord[1], coord[0]]), // [lng, lat]
+            coordinates: [
+              [origin[1], origin[0]], // [lng, lat]
+              [destination[1], destination[0]], // [lng, lat]
+            ],
             format: "json",
-            instructions: false, // We don't need turn-by-turn instructions
-            preference: "fastest", // Get the fastest route
           }),
         }
       );
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error(
-          "❌ OpenRouteService API error:",
-          response.status,
-          errorText
-        );
-
-        // If API fails, create a realistic road-like route manually
-        console.log("🗺️ Creating manual road-like route...");
-        return createManualRoute(origin, destination);
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
@@ -299,83 +233,43 @@ export const useWorkerDashboard = () => {
       if (data && data.routes && data.routes[0] && data.routes[0].geometry) {
         // Decode the polyline to get coordinates
         const polylineString = data.routes[0].geometry;
-        console.log("🗺️ Polyline string:", polylineString);
+        const routeCoords = polyline.decode(polylineString);
+        console.log("🗺️ Route coordinates count:", routeCoords.length);
+        console.log("🗺️ First 3 coordinates:", routeCoords.slice(0, 3));
+        console.log("🗺️ Last 3 coordinates:", routeCoords.slice(-3));
 
-        try {
-          const routeCoords = polyline.decode(polylineString);
-          console.log("🗺️ Route coordinates count:", routeCoords.length);
-          console.log("🗺️ First 3 coordinates:", routeCoords.slice(0, 3));
-          console.log("🗺️ Last 3 coordinates:", routeCoords.slice(-3));
-
-          // Validate coordinates before returning
-          if (
-            routeCoords.length > 0 &&
-            routeCoords.every(
-              (coord) =>
-                Array.isArray(coord) &&
-                coord.length === 2 &&
-                typeof coord[0] === "number" &&
-                typeof coord[1] === "number" &&
-                coord[0] >= -90 &&
-                coord[0] <= 90 &&
-                coord[1] >= -180 &&
-                coord[1] <= 180
-            )
-          ) {
-            console.log(
-              "🗺️ Route coordinates are valid, returning:",
-              routeCoords
-            );
-            return routeCoords as [number, number][];
-          } else {
-            console.log("❌ Route coordinates are invalid:", routeCoords);
-            return createManualRoute(origin, destination);
-          }
-        } catch (decodeError) {
-          console.error("❌ Failed to decode polyline:", decodeError);
-          console.error("❌ Polyline string was:", polylineString);
-          return createManualRoute(origin, destination);
+        // Validate coordinates before returning
+        if (
+          routeCoords.length > 0 &&
+          routeCoords.every(
+            (coord) =>
+              Array.isArray(coord) &&
+              coord.length === 2 &&
+              typeof coord[0] === "number" &&
+              typeof coord[1] === "number" &&
+              coord[0] >= -90 &&
+              coord[0] <= 90 &&
+              coord[1] >= -180 &&
+              coord[1] <= 180
+          )
+        ) {
+          console.log(
+            "🗺️ Route coordinates are valid, returning:",
+            routeCoords
+          );
+          return routeCoords;
+        } else {
+          console.log("❌ Route coordinates are invalid:", routeCoords);
+          return null;
         }
       }
 
-      console.log("🗺️ No route found in response, creating manual route");
-      return createManualRoute(origin, destination);
+      console.log("🗺️ No route found in response");
+      return null;
     } catch (error) {
       console.error("❌ Failed to fetch route:", error);
-      return createManualRoute(origin, destination);
+      return null;
     }
-  };
-
-  // Create a manual road-like route when API fails
-  const createManualRoute = (
-    origin: [number, number],
-    destination: [number, number]
-  ) => {
-    console.log("🗺️ Creating manual road-like route...");
-
-    const latDiff = destination[0] - origin[0];
-    const lngDiff = destination[1] - origin[1];
-    const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
-
-    // Create more points for longer distances
-    const numPoints = Math.max(5, Math.floor(distance * 1000)); // More points for longer routes
-    const route = [];
-
-    for (let i = 0; i <= numPoints; i++) {
-      const progress = i / numPoints;
-
-      // Add road-like curves (slight deviations from straight line)
-      const curveFactor = Math.sin(progress * Math.PI) * 0.0005;
-      const randomFactor = (Math.random() - 0.5) * 0.0003;
-
-      const lat = origin[0] + latDiff * progress + curveFactor + randomFactor;
-      const lng = origin[1] + lngDiff * progress + curveFactor + randomFactor;
-
-      route.push([lat, lng]);
-    }
-
-    console.log("🗺️ Manual route created with", route.length, "points");
-    return route as [number, number][];
   };
 
   // Accept job
@@ -391,6 +285,9 @@ export const useWorkerDashboard = () => {
     }
 
     setJobStatus("accepted");
+    setRouteLoading(true);
+
+    // Fetch the actual route from OpenRouteService
     if (
       location &&
       typeof location.lat === "number" &&
@@ -401,26 +298,39 @@ export const useWorkerDashboard = () => {
       typeof jobRequest.clientLocation[0] === "number" &&
       typeof jobRequest.clientLocation[1] === "number"
     ) {
-      // Debug log to check coordinates
-      // For best visibility, try client location lat: 22.6735289, lng: 88.3744036
-      console.log("Setting route with:", [
-        [location.lat, location.lng],
-        [jobRequest.clientLocation[0], jobRequest.clientLocation[1]],
-      ]);
-      // Try both orders for clientLocation in case of backend swap
-      setRoute([
-        [location.lat, location.lng],
-        [jobRequest.clientLocation[0], jobRequest.clientLocation[1]],
-      ]);
-      // Uncomment the following line if the above doesn't work:
-      // setRoute([
-      //   [location.lat, location.lng],
-      //   [jobRequest.clientLocation[1], jobRequest.clientLocation[0]],
-      // ]);
+      console.log("🗺️ Fetching route for job acceptance...");
+      console.log("Worker location:", [location.lat, location.lng]);
+      console.log("Job location:", jobRequest.clientLocation);
+
+      try {
+        const routeCoords = await fetchRoute(
+          [location.lat, location.lng],
+          [jobRequest.clientLocation[0], jobRequest.clientLocation[1]]
+        );
+
+        if (routeCoords && routeCoords.length > 0) {
+          console.log(
+            "🗺️ Route fetched successfully:",
+            routeCoords.length,
+            "coordinates"
+          );
+          setRoute(routeCoords as [number, number][]);
+        } else {
+          console.log("❌ No route coordinates received");
+          setRoute(null);
+        }
+      } catch (error) {
+        console.error("❌ Error fetching route:", error);
+        setRoute(null);
+      } finally {
+        setRouteLoading(false);
+      }
     } else {
+      console.log("❌ Invalid coordinates for route fetching");
       setRoute(null);
+      setRouteLoading(false);
     }
-  }, [jobRequest, workerId, location]);
+  }, [jobRequest, workerId, location, fetchRoute]);
 
   // Decline job
   const handleDeclineJob = useCallback(() => {
@@ -465,9 +375,9 @@ export const useWorkerDashboard = () => {
     }
   }, [goalInput]);
 
-  // Initialize socket connection
+  // Initialize socket connection and event listeners
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || !workerId) return;
 
     const socket = socketManager.getSocket();
     if (!socket) {
@@ -475,39 +385,49 @@ export const useWorkerDashboard = () => {
       return;
     }
 
-    console.log("🔌 Setting up socket event listeners");
+    console.log("🔌 Setting up socket event listeners for worker:", workerId);
+
+    // First, join the worker room
+    console.log("🔌 Joining worker room:", workerId);
+    socket.emit("join_worker_room", { workerId });
+    console.log("✅ Worker room join request sent");
+
+    // Then set up event listeners
     socket.on("new_job_broadcast", (jobData) => {
       console.log("📨 Received job broadcast:", jobData);
+      console.log("📨 Current worker ID:", workerId);
+      console.log("📨 Job worker distance:", jobData.workerDistance);
       handleNewJobBroadcast(jobData);
     });
+
     socket.on("job_accepted_success", () => {
       console.log("✅ Job accepted successfully");
       setJobStatus("accepted");
       setJobRequest(null);
     });
 
+    // Add more debugging events
+    socket.on("connect", () => {
+      console.log("✅ Socket connected, ID:", socket.id);
+    });
+
+    socket.on("disconnect", (reason) => {
+      console.log("❌ Socket disconnected:", reason);
+    });
+
+    socket.on("error", (error) => {
+      console.error("❌ Socket error:", error);
+    });
+
     return () => {
       console.log("🔌 Cleaning up socket event listeners");
       socket.off("new_job_broadcast", handleNewJobBroadcast);
       socket.off("job_accepted_success");
+      socket.off("connect");
+      socket.off("disconnect");
+      socket.off("error");
     };
-  }, [user?.id, handleNewJobBroadcast]);
-
-  // Initialize socket connection
-  useEffect(() => {
-    if (!user?.primaryEmailAddress?.emailAddress) return;
-
-    fetchWorkerId(user.primaryEmailAddress.emailAddress).then((dbWorkerId) => {
-      if (dbWorkerId) {
-        setWorkerId(dbWorkerId);
-        fetchWorkerProfile(dbWorkerId); // Update profile fetch too
-      }
-    });
-  }, [
-    user?.primaryEmailAddress?.emailAddress,
-    fetchWorkerId,
-    fetchWorkerProfile,
-  ]);
+  }, [user?.id, workerId, handleNewJobBroadcast]);
 
   // Time worked counter
   useEffect(() => {
@@ -520,25 +440,27 @@ export const useWorkerDashboard = () => {
     return () => clearInterval(timer);
   }, [isLive]);
 
-  // Initialize socket connection
-  useEffect(() => {
-    if (workerId) {
-      const socket = socketManager.getSocket();
-      if (socket) {
-        console.log("🔌 Joining worker room:", workerId);
-        socket.emit("join_worker_room", { workerId });
-        console.log("✅ Worker room join request sent");
-      } else {
-        console.log("❌ Socket not available for worker room join");
-      }
-    }
-  }, [workerId]);
-
   // Logout
   const handleLogout = useCallback(() => {
     localStorage.removeItem("userProfile");
     router.push("/");
   }, [router]);
+
+  // Initialize worker ID and profile
+  useEffect(() => {
+    if (!user?.primaryEmailAddress?.emailAddress) return;
+
+    fetchWorkerId(user.primaryEmailAddress.emailAddress).then((dbWorkerId) => {
+      if (dbWorkerId) {
+        setWorkerId(dbWorkerId);
+        fetchWorkerProfile(dbWorkerId);
+      }
+    });
+  }, [
+    user?.primaryEmailAddress?.emailAddress,
+    fetchWorkerId,
+    fetchWorkerProfile,
+  ]);
 
   return {
     // State
@@ -560,10 +482,7 @@ export const useWorkerDashboard = () => {
     goalInput,
     profile,
     workerId,
-
-    // Icons
-    workerIcon,
-    jobIcon,
+    routeLoading,
 
     // Handlers
     toggleTheme,
@@ -579,32 +498,3 @@ export const useWorkerDashboard = () => {
     fetchWorkerId,
   };
 };
-
-export function useDeviceHeading() {
-  const [heading, setHeading] = useState(0);
-
-  useEffect(() => {
-    function handleOrientation(event: DeviceOrientationEvent) {
-      // event.alpha is the compass heading in degrees (0 = north)
-      if (event.alpha !== null) {
-        setHeading(event.alpha);
-      }
-    }
-    window.addEventListener(
-      "deviceorientationabsolute",
-      handleOrientation,
-      true
-    );
-    window.addEventListener("deviceorientation", handleOrientation, true);
-
-    return () => {
-      window.removeEventListener(
-        "deviceorientationabsolute",
-        handleOrientation
-      );
-      window.removeEventListener("deviceorientation", handleOrientation);
-    };
-  }, []);
-
-  return heading;
-}

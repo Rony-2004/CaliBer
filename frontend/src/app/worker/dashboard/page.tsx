@@ -51,6 +51,7 @@ export default function WorkerDashboardPage() {
     jobRequest,
     jobHistory,
     route,
+    routeLoading,
     countdownTime,
     earnings,
     timeWorked,
@@ -72,6 +73,8 @@ export default function WorkerDashboardPage() {
     setGoalInput,
     setIsEditingGoal,
     handleLogout,
+    checkWorkerStatus,
+    testJobBroadcast,
   } = useWorkerDashboard();
 
   // Active job UI state
@@ -193,6 +196,22 @@ export default function WorkerDashboardPage() {
               <ThemeToggle theme={theme} onToggle={toggleTheme} />
               <button
                 className={styles.iconButton}
+                title="Test Job Broadcast"
+                onClick={testJobBroadcast}
+                style={{ backgroundColor: "#f59e0b", color: "white" }}
+              >
+                🧪
+              </button>
+              <button
+                className={styles.iconButton}
+                title="Check Worker Status"
+                onClick={checkWorkerStatus}
+                style={{ backgroundColor: "#10b981", color: "white" }}
+              >
+                📊
+              </button>
+              <button
+                className={styles.iconButton}
                 title="Notifications"
                 onClick={() => {
                   console.log("Notification clicked, jobRequest:", jobRequest);
@@ -247,6 +266,7 @@ export default function WorkerDashboardPage() {
                       jobRequest ? jobRequest.clientLocation : null
                     }
                     route={route}
+                    routeLoading={routeLoading}
                   />
                 ) : (
                   <div className={styles.mapPlaceholder}>
