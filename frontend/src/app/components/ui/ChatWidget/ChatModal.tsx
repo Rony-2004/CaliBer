@@ -76,6 +76,7 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose }) => {
     try {
       const response = await fetch('http://localhost:8000/api/analyze', { method: 'POST', body: formData });
       const data = await response.json();
+      console.log('AI response:', data);
       if (!response.ok) { throw new Error(data.error || 'An API error occurred.'); }
       setResult(data);
     } catch (err: any) { setError(err.message || 'Failed to connect to AI service. Is the Python server running?'); } 
@@ -271,6 +272,8 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose }) => {
                   style={{ display: 'none' }}
                   accept="image/*"
                   capture="environment"
+                  title="Upload an image"
+                  placeholder="Choose an image file"
                 />
                 <input
                   type="file"
@@ -279,6 +282,8 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose }) => {
                   style={{ display: 'none' }}
                   accept="video/*"
                   capture="environment"
+                  title="Upload a video"
+                  placeholder="Choose a video file"
                 />
                 <input
                   type="file"
@@ -286,6 +291,8 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose }) => {
                   onChange={e => handleFileChange(e, 'video')}
                   style={{ display: 'none' }}
                   accept="video/*"
+                  title="Upload a video from gallery"
+                  placeholder="Choose a video file from gallery"
                 />
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                   <button type="button" onClick={handleVoiceInput}

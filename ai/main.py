@@ -5,8 +5,28 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 
+# Gemini translation imports
+import google.generativeai as genai
+
 # Load environment variables from .env file in the current folder
 load_dotenv()
+
+# Configure Gemini API key
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+
+def translate_to_english(text):
+    if not GEMINI_API_KEY:
+        return text  # No translation if no key
+    try:
+        model = genai.GenerativeModel('gemini-pro')
+        prompt = f"Translate this to English: {text}"
+        response = model.generate_content(prompt)
+        return response.text.strip()
+    except Exception as e:
+        print(f"[TRANSLATE ERROR] {e}")
+        return text
 
 from problem_identifier import get_service_keyword_fallback
 
@@ -34,6 +54,8 @@ def analyze():
     file_path = None
     try:
         description = request.form.get('description', '')
+        if description:
+            description = translate_to_english(description)
 
         if 'file' in request.files:
             file = request.files['file']
@@ -49,15 +71,19 @@ def analyze():
         missing_worker_ids = []
         if result.get('workers') and result['workers'].get('data'):
             for w in result['workers']['data']:
-                worker_id = w.get('workerId')
-                if not worker_id:
-                    missing_worker_ids.append("(no workerId in specialization row)")
-                    continue
-                name = get_worker_name(worker_id)
-                if name:
-                    worker_names.append(name)
+                # If w is a string, just use it as the name
+                if isinstance(w, str):
+                    worker_names.append(w)
                 else:
-                    missing_worker_ids.append(worker_id)
+                    worker_id = w.get('workerId')
+                    if not worker_id:
+                        missing_worker_ids.append("(no workerId in specialization row)")
+                        continue
+                    name = get_worker_name(worker_id)
+                    if name:
+                        worker_names.append(name)
+                    else:
+                        missing_worker_ids.append(worker_id)
 
         # Compose a helpful message
         if not result.get('workers') or not result['workers'].get('data'):

@@ -170,21 +170,27 @@ def find_subcategory(category: str, user_prompt: str) -> str:
     return best_match if best_score > 0 else None
 
 def get_workers_by_specialization(category: str, subcategory: str = None) -> Dict:
-    """Fetch workers from backend by specialization"""
+    """Fetch workers from backend by specialization. If no workers found for subcategory, fallback to category only."""
     try:
         backend_url = os.getenv("BACKEND_URL", "http://localhost:5000")
-        
         if subcategory:
             # Convert display name to enum value
             subcategory_enum = get_subcategory_enum(subcategory)
             response = requests.get(f"{backend_url}/api/v1/specializations/workers/{category}/{subcategory_enum}")
+            if response.status_code == 200 and response.json().get('data'):
+                return response.json()
+            # Fallback: try category only if no data found
+            response = requests.get(f"{backend_url}/api/v1/specializations/workers/{category}")
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return {"error": f"Failed to fetch workers: {response.status_code}", "data": []}
         else:
             response = requests.get(f"{backend_url}/api/v1/specializations/workers/{category}")
-        
-        if response.status_code == 200:
-            return response.json()
-        else:
-            return {"error": f"Failed to fetch workers: {response.status_code}", "data": []}
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return {"error": f"Failed to fetch workers: {response.status_code}", "data": []}
     except Exception as e:
         return {"error": f"Error connecting to backend: {str(e)}", "data": []}
 

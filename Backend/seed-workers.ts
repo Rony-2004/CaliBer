@@ -61,7 +61,7 @@ async function seedWorkers() {
       {
         workerId: createdWorkers[0].id,
         category: "plumber" as const,
-        subCategory: "leak_fixing" as const,
+        subCategory: "tape_repair" as const,
         isPrimary: true,
         proficiency: 5,
       },

@@ -179,7 +179,7 @@ export const getWorkersBySpecialization = async (req: Request, res: Response) =>
     console.log("workerDetails:", workerDetails);
 
     const names = workerDetails.map(w => `${w.firstName} ${w.lastName}`);
-    res.status(200).json({ names });
+    res.status(200).json({ data: names });
   } catch (error) {
     console.error("Error in getWorkersBySpecialization:", error);
     res.status(500).json({ error: "Failed to fetch workers by specialization" });
