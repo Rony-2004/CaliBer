@@ -32,6 +32,7 @@ import {
 } from "react-icons/fi";
 import ThemeToggle from "./ThemeToggle";
 import { useWorkerDashboard } from "./useWorkerDashboard";
+import socketManager from "@/lib/socket";
 
 const WorkerMap = dynamic(() => import("./WorkerMap"), {
   ssr: false,
@@ -266,7 +267,6 @@ export default function WorkerDashboardPage() {
                       jobRequest ? jobRequest.clientLocation : null
                     }
                     route={route}
-                    routeLoading={routeLoading}
                   />
                 ) : (
                   <div className={styles.mapPlaceholder}>

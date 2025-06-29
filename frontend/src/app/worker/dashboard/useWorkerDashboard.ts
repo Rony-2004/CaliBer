@@ -462,6 +462,81 @@ export const useWorkerDashboard = () => {
     fetchWorkerProfile,
   ]);
 
+  // Test job broadcast function for debugging
+  const testJobBroadcast = useCallback(async () => {
+    if (!workerId) {
+      console.log("❌ [TEST] Worker ID not available");
+      return;
+    }
+
+    console.log("🧪 [TEST] Testing job broadcast...");
+    console.log("🧪 [TEST] Worker ID:", workerId);
+    console.log("🧪 [TEST] Is Live:", isLive);
+    console.log("🧪 [TEST] Location:", location);
+
+    // Create a test job
+    const testJob = {
+      id: `test-${Date.now()}`,
+      description: "Test Job - Plumbing Service",
+      fare: 500,
+      lat: location?.lat || 12.9716, // Default to Bangalore if no location
+      lng: location?.lng || 77.5946,
+      address: "Test Address",
+      userId: "test-user",
+      workerDistance: 1.5,
+      durationMinutes: 60,
+    };
+
+    console.log("🧪 [TEST] Test job data:", testJob);
+    handleNewJobBroadcast(testJob);
+  }, [workerId, isLive, location, handleNewJobBroadcast]);
+
+  // Check worker status function
+  const checkWorkerStatus = useCallback(async () => {
+    if (!workerId) {
+      console.log("❌ [STATUS] Worker ID not available");
+      return;
+    }
+
+    try {
+      console.log("🔍 [STATUS] Checking worker status...");
+
+      // Check worker details
+      const workerResponse = await fetch(
+        `http://localhost:5000/api/v1/workers/${workerId}`
+      );
+      if (workerResponse.ok) {
+        const workerData = await workerResponse.json();
+        console.log("✅ [STATUS] Worker details:", workerData);
+        console.log("✅ [STATUS] Is Active:", workerData.isActive);
+      } else {
+        console.log("❌ [STATUS] Failed to fetch worker details");
+      }
+
+      // Check live location
+      const locationResponse = await fetch(
+        `http://localhost:5000/api/v1/live-locations?workerId=${workerId}`
+      );
+      if (locationResponse.ok) {
+        const locationData = await locationResponse.json();
+        console.log("✅ [STATUS] Live location:", locationData);
+      } else {
+        console.log("❌ [STATUS] Failed to fetch live location");
+      }
+
+      // Check socket connection
+      const socket = socketManager.getSocket();
+      if (socket) {
+        console.log("✅ [STATUS] Socket connected:", socket.connected);
+        console.log("✅ [STATUS] Socket ID:", socket.id);
+      } else {
+        console.log("❌ [STATUS] Socket not available");
+      }
+    } catch (error) {
+      console.error("❌ [STATUS] Error checking worker status:", error);
+    }
+  }, [workerId]);
+
   return {
     // State
     theme,
@@ -496,5 +571,7 @@ export const useWorkerDashboard = () => {
     handleLogout,
     fetchWorkerProfile,
     fetchWorkerId,
+    testJobBroadcast,
+    checkWorkerStatus,
   };
 };

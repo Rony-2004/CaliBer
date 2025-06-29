@@ -94,7 +94,6 @@ export default function WorkerMap({
 
   return (
     <MapContainer 
-      key={mapKey}
       center={workerPosition} 
       zoom={15} 
       style={{ height: '100%', width: '100%' }}
